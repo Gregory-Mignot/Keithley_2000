@@ -130,25 +130,22 @@ class SettingsTab:
         """Met à jour la liste des ressources"""
         if resources:
             self.resource_combo['values'] = resources
-            
-            # Sélectionner le premier GPIB trouvé
-            gpib_resources = [r for r in resources if 'GPIB' in r.upper()]
-            if gpib_resources:
-                self.resource_combo.set(gpib_resources[0])
-            elif resources:
-                self.resource_combo.set(resources[0])
-            
-            self.update_status(f"{len(resources)} ressource(s) trouvée(s)", "green")
-            self.add_info(f"✓ {len(resources)} ressource(s) VISA détectée(s)")
+
+            # Sélectionner le premier trouvé
+            self.resource_combo.set(resources[0])
+
+            self.update_status(f"{len(resources)} Keithley 2000 trouvé(s)", "green")
+            self.add_info(f"✓ {len(resources)} Keithley 2000 compatible(s) détecté(s)")
             for res in resources:
                 self.add_info(f"  - {res}")
         else:
-            self.update_status("Aucune ressource trouvée", "red")
-            self.add_info("✗ Aucune ressource VISA détectée")
+            self.update_status("Aucun Keithley 2000 trouvé", "red")
+            self.add_info("✗ Aucun Keithley 2000 détecté")
             self.add_info("  Vérifiez que:")
             self.add_info("  - La carte GPIB est installée")
             self.add_info("  - Les drivers sont installés")
             self.add_info("  - L'instrument est allumé")
+            self.add_info("  - C'est bien un Keithley série 2000")
     
     def show_scan_error(self, error_msg):
         """Affiche une erreur de scan"""
@@ -158,11 +155,14 @@ class SettingsTab:
     
     def connect_instrument(self):
         """Établit la connexion avec l'instrument"""
-        resource = self.resource_var.get()
-        
-        if not resource:
+        resource_display = self.resource_var.get()
+
+        if not resource_display:
             messagebox.showwarning("Attention", "Veuillez sélectionner une ressource VISA")
             return
+
+        # Extraire l'adresse VISA (avant le " - ")
+        resource = resource_display.split(' - ')[0].strip()
         
         self.update_status("Connexion en cours...", "orange")
         self.connect_btn.config(state='disabled')

@@ -271,14 +271,15 @@ class Keithley2000:
         return units.get(func, '')
     
     @staticmethod
-    def list_resources(verify=True, timeout=1000):
+    def list_resources(verify=True, timeout=1000, filter_keithley=True):
         """
         Liste les ressources VISA disponibles
         Args:
             verify (bool): Si True, vérifie que l'instrument répond (*IDN?)
             timeout (int): Timeout en ms pour la vérification
+            filter_keithley (bool): Si True, ne garde que les Keithley série 2000
         Returns:
-            list: Liste des adresses VISA (avec instruments qui répondent si verify=True)
+            list: Liste des chaînes "adresse - modèle" pour les instruments compatibles
         """
         try:
             rm = pyvisa.ResourceManager()
@@ -287,15 +288,43 @@ class Keithley2000:
             if not verify:
                 return all_resources
 
-            # Vérifier chaque ressource
+            # Trier pour avoir les adresses simples (sans secondary) en premier
+            # Ex: GPIB0::16::INSTR avant GPIB0::16::0::INSTR
+            def address_priority(addr):
+                # Compter le nombre de :: pour déterminer la complexité
+                return addr.count('::')
+
+            sorted_resources = sorted(all_resources, key=address_priority)
+
+            # Vérifier chaque ressource et éliminer les doublons
+            # (même instrument accessible via plusieurs adresses secondaires)
             verified_resources = []
-            for resource in all_resources:
+            seen_idn = set()
+
+            for resource in sorted_resources:
                 try:
                     instr = rm.open_resource(resource)
                     instr.timeout = timeout
-                    instr.query('*IDN?')
+                    idn = instr.query('*IDN?').strip()
                     instr.close()
-                    verified_resources.append(resource)
+
+                    # Ne garder que si c'est un nouvel instrument
+                    if idn not in seen_idn:
+                        seen_idn.add(idn)
+
+                        # Extraire le modèle du IDN (format: MANUFACTURER,MODEL,SERIAL,VERSION)
+                        idn_parts = idn.split(',')
+                        manufacturer = idn_parts[0] if len(idn_parts) > 0 else ''
+                        model = idn_parts[1] if len(idn_parts) > 1 else ''
+
+                        # Filtrer pour Keithley série 2000
+                        if filter_keithley:
+                            if 'KEITHLEY' in manufacturer.upper() and '2000' in model.upper():
+                                display_name = f"{resource} - {model.strip()}"
+                                verified_resources.append(display_name)
+                        else:
+                            display_name = f"{resource} - {manufacturer.strip()} {model.strip()}"
+                            verified_resources.append(display_name)
                 except:
                     # L'instrument ne répond pas, on l'ignore
                     pass

@@ -58,13 +58,23 @@ class QuickMeasureTab:
     
     def create_config_section(self, parent):
         """Crée la section de configuration"""
-        
+
+        # Calibres par type de mesure (Keithley 2000)
+        self.ranges_by_type = {
+            'DCV': ['AUTO', '0.1 V', '1 V', '10 V', '100 V', '1000 V'],
+            'ACV': ['AUTO', '0.1 V', '1 V', '10 V', '100 V', '750 V'],
+            'DCI': ['AUTO', '10 mA', '100 mA', '1 A', '3 A'],
+            'ACI': ['AUTO', '1 A', '3 A'],
+            'RES_2W': ['AUTO', '100 Ω', '1 kΩ', '10 kΩ', '100 kΩ', '1 MΩ', '10 MΩ', '100 MΩ'],
+            'RES_4W': ['AUTO', '100 Ω', '1 kΩ', '10 kΩ', '100 kΩ', '1 MΩ', '10 MΩ', '100 MΩ'],
+        }
+
         # Type de mesure
         meas_frame = ttk.LabelFrame(parent, text="Type de Mesure", padding=10)
         meas_frame.pack(fill='x', pady=5)
-        
+
         self.meas_type_var = tk.StringVar(value='DCV')
-        
+
         measures = [
             ('DCV - Tension DC', 'DCV'),
             ('ACV - Tension AC', 'ACV'),
@@ -73,78 +83,95 @@ class QuickMeasureTab:
             ('RES_2W - Résistance 2 fils', 'RES_2W'),
             ('RES_4W - Résistance 4 fils', 'RES_4W'),
         ]
-        
+
         for text, value in measures:
-            rb = ttk.Radiobutton(meas_frame, text=text, variable=self.meas_type_var, value=value)
+            rb = ttk.Radiobutton(meas_frame, text=text, variable=self.meas_type_var, value=value,
+                                 command=self.on_measure_type_changed)
             rb.pack(anchor='w', pady=2)
-        
+
         # Configuration mesure
         config_frame = ttk.LabelFrame(parent, text="Configuration", padding=10)
         config_frame.pack(fill='x', pady=5)
-        
-        # Plage
+
+        # Calibre
         range_frame = ttk.Frame(config_frame)
         range_frame.pack(fill='x', pady=2)
-        
-        ttk.Label(range_frame, text="Plage:").pack(side='left')
+
+        ttk.Label(range_frame, text="Calibre:").pack(side='left')
         self.range_var = tk.StringVar(value='AUTO')
-        range_combo = ttk.Combobox(range_frame, textvariable=self.range_var, width=15, state='readonly')
-        range_combo['values'] = ['AUTO', '0.1', '1', '10', '100', '1000']
-        range_combo.pack(side='left', padx=5)
+        self.range_combo = ttk.Combobox(range_frame, textvariable=self.range_var, width=15, state='readonly')
+        self.range_combo['values'] = self.ranges_by_type['DCV']
+        self.range_combo.pack(side='left', padx=5)
         
-        # NPLC (résolution)
-        nplc_frame = ttk.Frame(config_frame)
-        nplc_frame.pack(fill='x', pady=2)
-        
-        ttk.Label(nplc_frame, text="NPLC:").pack(side='left')
+        # NPLC (temps d'intégration)
+        nplc_frame = ttk.LabelFrame(config_frame, text="NPLC (temps d'intégration)", padding=5)
+        nplc_frame.pack(fill='x', pady=5)
+
+        nplc_select_frame = ttk.Frame(nplc_frame)
+        nplc_select_frame.pack(fill='x')
+
         self.nplc_var = tk.DoubleVar(value=1.0)
-        nplc_combo = ttk.Combobox(nplc_frame, textvariable=self.nplc_var, width=15, state='readonly')
+        nplc_combo = ttk.Combobox(nplc_select_frame, textvariable=self.nplc_var, width=10, state='readonly')
         nplc_combo['values'] = [0.01, 0.1, 1.0, 5.0, 10.0]
         nplc_combo.pack(side='left', padx=5)
-        
-        ttk.Label(nplc_frame, text="(vitesse vs précision)").pack(side='left')
-        
+
+        nplc_help = ttk.Label(nplc_frame, text="Nombre de cycles secteur pour la mesure.\n"
+                              "0.01 = rapide (~0.2ms), moins précis, plus de bruit\n"
+                              "10 = lent (~200ms), très précis, peu de bruit",
+                              font=('Arial', 8), foreground='gray')
+        nplc_help.pack(anchor='w', padx=5)
+
         # Options vitesse
         speed_frame = ttk.LabelFrame(parent, text="Options Vitesse", padding=10)
         speed_frame.pack(fill='x', pady=5)
 
         self.fast_mode_var = tk.BooleanVar(value=False)
-        fast_cb = ttk.Checkbutton(speed_frame, text="Mode Fast (INIT/FETC)",
+        fast_cb = ttk.Checkbutton(speed_frame, text="Mode Fast",
                                   variable=self.fast_mode_var)
         fast_cb.pack(anchor='w', pady=2)
+        fast_help = ttk.Label(speed_frame, text="   Réduit la communication GPIB (gain ~10-20%)",
+                              font=('Arial', 8), foreground='gray')
+        fast_help.pack(anchor='w')
 
         self.display_off_var = tk.BooleanVar(value=False)
         display_cb = ttk.Checkbutton(speed_frame, text="Désactiver affichage instrument",
                                      variable=self.display_off_var)
         display_cb.pack(anchor='w', pady=2)
+        display_help = ttk.Label(speed_frame, text="   L'écran du Keithley s'éteint, gain ~10-15%",
+                                 font=('Arial', 8), foreground='gray')
+        display_help.pack(anchor='w')
 
         self.filter_var = tk.BooleanVar(value=False)
-        filter_cb = ttk.Checkbutton(speed_frame, text="Filtre numérique",
+        filter_cb = ttk.Checkbutton(speed_frame, text="Filtre numérique (moyenne glissante)",
                                     variable=self.filter_var,
                                     command=self.toggle_filter)
         filter_cb.pack(anchor='w', pady=2)
-        
+
         # Nombre de points pour le filtre
         self.filter_frame = ttk.Frame(speed_frame)
-        ttk.Label(self.filter_frame, text="  Points filtre:").pack(side='left')
+        ttk.Label(self.filter_frame, text="   Nb points:").pack(side='left')
         self.filter_count_var = tk.IntVar(value=10)
-        filter_spin = ttk.Spinbox(self.filter_frame, from_=2, to=100, 
+        filter_spin = ttk.Spinbox(self.filter_frame, from_=2, to=100,
                                   textvariable=self.filter_count_var, width=8)
         filter_spin.pack(side='left', padx=5)
-        
+
         # Acquisition
         acq_frame = ttk.LabelFrame(parent, text="Acquisition", padding=10)
         acq_frame.pack(fill='x', pady=5)
-        
+
         # Intervalle entre mesures
         interval_frame = ttk.Frame(acq_frame)
         interval_frame.pack(fill='x', pady=2)
-        
+
         ttk.Label(interval_frame, text="Intervalle (s):").pack(side='left')
         self.interval_var = tk.DoubleVar(value=0.1)
-        interval_spin = ttk.Spinbox(interval_frame, from_=0.001, to=3600, increment=0.1,
-                                    textvariable=self.interval_var, width=10, format='%.3f')
+        interval_spin = ttk.Spinbox(interval_frame, from_=0.05, to=3600, increment=0.05,
+                                    textvariable=self.interval_var, width=10, format='%.2f')
         interval_spin.pack(side='left', padx=5)
+
+        interval_help = ttk.Label(acq_frame, text="Min 0.05s (~20 mes/s max avec NPLC=0.01)",
+                                  font=('Arial', 8), foreground='gray')
+        interval_help.pack(anchor='w', padx=5)
         
         # Durée maximale
         duration_frame = ttk.Frame(acq_frame)
@@ -213,18 +240,22 @@ class QuickMeasureTab:
         # Options graphique
         graph_options_frame = ttk.Frame(parent)
         graph_options_frame.pack(fill='x', pady=5)
-        
-        self.autoscale_var = tk.BooleanVar(value=True)
-        autoscale_cb = ttk.Checkbutton(graph_options_frame, text="Autoscale", 
-                                       variable=self.autoscale_var)
-        autoscale_cb.pack(side='left', padx=5)
-        
-        self.scroll_var = tk.BooleanVar(value=True)
-        scroll_cb = ttk.Checkbutton(graph_options_frame, text="Défilement continu", 
-                                    variable=self.scroll_var)
-        scroll_cb.pack(side='left', padx=5)
-        
-        ttk.Button(graph_options_frame, text="Zoom Reset", 
+
+        ttk.Label(graph_options_frame, text="Affichage:").pack(side='left', padx=5)
+
+        self.display_mode_var = tk.StringVar(value='Tout afficher')
+        display_mode_combo = ttk.Combobox(graph_options_frame, textvariable=self.display_mode_var,
+                                          width=20, state='readonly')
+        display_mode_combo['values'] = [
+            'Tout afficher',
+            '100 derniers points',
+            '500 derniers points',
+            '1000 derniers points',
+            'Manuel (zoom libre)'
+        ]
+        display_mode_combo.pack(side='left', padx=5)
+
+        ttk.Button(graph_options_frame, text="Zoom Reset",
                   command=self.reset_zoom).pack(side='left', padx=5)
         
         # Graphique matplotlib
@@ -246,6 +277,39 @@ class QuickMeasureTab:
         toolbar = NavigationToolbar2Tk(self.canvas, parent)
         toolbar.update()
     
+    def on_measure_type_changed(self):
+        """Met à jour les calibres disponibles selon le type de mesure"""
+        meas_type = self.meas_type_var.get()
+        if meas_type in self.ranges_by_type:
+            self.range_combo['values'] = self.ranges_by_type[meas_type]
+            self.range_var.set('AUTO')
+
+    def convert_range_to_value(self, range_str):
+        """Convertit le calibre affiché en valeur numérique pour le Keithley"""
+        if range_str == 'AUTO':
+            return 'AUTO'
+
+        # Extraire le nombre et l'unité
+        parts = range_str.split()
+        if len(parts) != 2:
+            return range_str
+
+        value = float(parts[0])
+        unit = parts[1]
+
+        # Conversion selon l'unité
+        multipliers = {
+            'V': 1,
+            'mA': 0.001,
+            'A': 1,
+            'Ω': 1,
+            'kΩ': 1000,
+            'MΩ': 1000000,
+        }
+
+        multiplier = multipliers.get(unit, 1)
+        return value * multiplier
+
     def toggle_filter(self):
         """Active/désactive le frame du filtre"""
         if self.filter_var.get():
@@ -265,9 +329,10 @@ class QuickMeasureTab:
         # Configuration de l'instrument
         try:
             meas_type = self.meas_type_var.get()
-            range_val = self.range_var.get()
+            range_display = self.range_var.get()
+            range_val = self.convert_range_to_value(range_display)
             nplc = self.nplc_var.get()
-            
+
             self.keithley.configure_measurement(meas_type, range_val)
             self.keithley.set_nplc(nplc, meas_type)
             
@@ -401,27 +466,41 @@ class QuickMeasureTab:
         # Mise à jour de la ligne
         self.line.set_data(x_data, y_data)
 
-        # Autoscale ou scroll
-        if self.autoscale_var.get():
-            # Réactiver l'autoscale sur les deux axes
+        # Mode d'affichage
+        mode = self.display_mode_var.get()
+
+        if mode == 'Tout afficher':
+            # Afficher toutes les données
             self.ax.set_autoscale_on(True)
             self.ax.relim()
             self.ax.autoscale_view(True, True, True)
-        elif self.scroll_var.get():
-            # Défilement: garder les 100 derniers points visibles
-            if len(x_data) > 100:
-                x_min = x_data[-100]
+
+        elif mode == 'Manuel (zoom libre)':
+            # Ne rien faire, l'utilisateur contrôle le zoom
+            pass
+
+        else:
+            # Mode défilement: extraire le nombre de points
+            if '100' in mode:
+                n_points = 100
+            elif '500' in mode:
+                n_points = 500
+            elif '1000' in mode:
+                n_points = 1000
+            else:
+                n_points = 100
+
+            if len(x_data) > n_points:
+                x_min = x_data[-n_points]
                 x_max = x_data[-1]
                 # Trouver les Y min/max pour les points visibles
-                visible_mask = x_data >= x_min
-                visible_y = y_data[visible_mask]
-                if len(visible_y) > 0:
-                    y_min, y_max = np.min(visible_y), np.max(visible_y)
-                    margin = (y_max - y_min) * 0.1 if y_max != y_min else 0.1
-                    self.ax.set_xlim(x_min, x_max)
-                    self.ax.set_ylim(y_min - margin, y_max + margin)
+                visible_y = y_data[-n_points:]
+                y_min, y_max = np.min(visible_y), np.max(visible_y)
+                margin = (y_max - y_min) * 0.1 if y_max != y_min else abs(y_min) * 0.1 or 0.1
+                self.ax.set_xlim(x_min, x_max)
+                self.ax.set_ylim(y_min - margin, y_max + margin)
             else:
-                # Moins de 100 points: afficher tout
+                # Pas assez de points: afficher tout
                 self.ax.relim()
                 self.ax.autoscale_view()
 
@@ -432,21 +511,29 @@ class QuickMeasureTab:
         """Met à jour les statistiques"""
         self.stats_text.config(state='normal')
         self.stats_text.delete('1.0', 'end')
-        
+
         if len(self.data_values) > 0:
             values = np.array(self.data_values)
-            
-            stats = f"""Points: {len(values)}
-Min:    {np.min(values):.6g}
-Max:    {np.max(values):.6g}
-Moyenne:{np.mean(values):.6g}
-Std Dev:{np.std(values):.6g}
-Dernier:{values[-1]:.6g}"""
-            
+            times = np.array(self.data_time)
+
+            stats = f"""Points:  {len(values)}
+Min:     {np.min(values):.6g}
+Max:     {np.max(values):.6g}
+Moyenne: {np.mean(values):.6g}
+Std Dev: {np.std(values):.6g}
+Dernier: {values[-1]:.6g}"""
+
+            # Calcul du temps moyen entre mesures
+            if len(times) > 1:
+                intervals = np.diff(times)
+                avg_interval = np.mean(intervals)
+                rate = 1.0 / avg_interval if avg_interval > 0 else 0
+                stats += f"\n--- Vitesse ---\nIntervalle: {avg_interval*1000:.1f} ms\nCadence:  {rate:.1f} mes/s"
+
             self.stats_text.insert('1.0', stats)
         else:
             self.stats_text.insert('1.0', "Aucune donnée")
-        
+
         self.stats_text.config(state='disabled')
     
     def clear_data(self):
@@ -471,8 +558,8 @@ Dernier:{values[-1]:.6g}"""
             self.ax.relim()
             self.ax.autoscale_view(True, True, True)
             self.canvas.draw()
-            # Réactiver la case autoscale
-            self.autoscale_var.set(True)
+            # Remettre le mode sur "Tout afficher"
+            self.display_mode_var.set('Tout afficher')
     
     def save_current_config(self):
         """Sauvegarde la configuration actuelle"""

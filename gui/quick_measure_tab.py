@@ -10,7 +10,10 @@ from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import matplotlib.image as mpimg
 import numpy as np
+import os
 
 class QuickMeasureTab:
     """Onglet de mesure rapide avec graphique"""
@@ -36,26 +39,91 @@ class QuickMeasureTab:
     
     def create_widgets(self):
         """Crée les widgets de l'onglet"""
-        
+
         # Frame principal avec 2 colonnes
         main_frame = ttk.Frame(self.frame)
         main_frame.pack(fill='both', expand=True, padx=5, pady=5)
-        
-        # Colonne gauche: Configuration
-        left_frame = ttk.Frame(main_frame, width=350)
-        left_frame.pack(side='left', fill='y', padx=5)
-        left_frame.pack_propagate(False)
-        
+
+        # Colonne gauche: Configuration avec scrollbar
+        left_container = ttk.Frame(main_frame, width=370)
+        left_container.pack(side='left', fill='y', padx=5)
+        left_container.pack_propagate(False)
+
+        # Canvas pour le scroll
+        self.config_canvas = tk.Canvas(left_container, highlightthickness=0, width=350)
+        scrollbar = ttk.Scrollbar(left_container, orient='vertical', command=self.config_canvas.yview)
+
+        # Frame scrollable à l'intérieur du canvas
+        self.scrollable_frame = ttk.Frame(self.config_canvas)
+
+        # Configurer le scroll
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.config_canvas.configure(scrollregion=self.config_canvas.bbox("all"))
+        )
+
+        self.config_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.config_canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Pack canvas et scrollbar
+        self.config_canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+        # Scroll avec la molette de la souris (seulement sur le panneau config)
+        self.config_canvas.bind("<Enter>", lambda e: self.config_canvas.bind_all("<MouseWheel>", self._on_mousewheel))
+        self.config_canvas.bind("<Leave>", lambda e: self.config_canvas.unbind_all("<MouseWheel>"))
+
         # Colonne droite: Graphique
         right_frame = ttk.Frame(main_frame)
         right_frame.pack(side='right', fill='both', expand=True, padx=5)
-        
+
         # === CONFIGURATION ===
-        self.create_config_section(left_frame)
-        
+        self.create_config_section(self.scrollable_frame)
+
         # === GRAPHIQUE ===
         self.create_graph_section(right_frame)
-    
+
+    def _on_mousewheel(self, event):
+        """Gère le scroll avec la molette de la souris"""
+        self.config_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _add_logo(self):
+        """Ajoute le logo OptiMag dans la figure, sous l'axe X (coin droit)"""
+        try:
+            from PIL import Image
+
+            # Chemin du logo (même dossier que le script principal)
+            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            logo_path = os.path.join(script_dir, 'logo_optimag.png')
+
+            if os.path.exists(logo_path):
+                # Charger et redimensionner avec PIL
+                pil_image = Image.open(logo_path)
+
+                # Redimensionner pour une hauteur de ~35 pixels
+                target_height = 35
+                aspect = pil_image.width / pil_image.height
+                new_width = int(target_height * aspect)
+                pil_image = pil_image.resize((new_width, target_height), Image.LANCZOS)
+
+                # Convertir en array numpy pour matplotlib
+                logo = np.array(pil_image)
+
+                # Ajuster la figure pour laisser de la place en bas
+                self.fig.subplots_adjust(bottom=0.15)
+
+                # Position en bas à droite (en pixels depuis le coin bas-gauche)
+                fig_width = self.fig.get_figwidth() * self.fig.dpi
+                x_pos = int(fig_width - new_width - 10)
+                y_pos = 5
+
+                # Ajouter l'image à la figure
+                self.fig.figimage(logo, xo=x_pos, yo=y_pos, alpha=0.8, zorder=10)
+
+        except Exception as e:
+            # Si le logo ne peut pas être chargé, on continue sans
+            print(f"Logo non chargé: {e}")
+
     def create_config_section(self, parent):
         """Crée la section de configuration"""
 
@@ -125,13 +193,34 @@ class QuickMeasureTab:
         speed_frame = ttk.LabelFrame(parent, text="Options Vitesse", padding=10)
         speed_frame.pack(fill='x', pady=5)
 
+        # Mode Buffer (le plus rapide)
+        self.buffer_mode_var = tk.BooleanVar(value=False)
+        buffer_cb = ttk.Checkbutton(speed_frame, text="Mode Buffer (acquisition rapide)",
+                                    variable=self.buffer_mode_var,
+                                    command=self.toggle_buffer_mode)
+        buffer_cb.pack(anchor='w', pady=2)
+        self.buffer_help = ttk.Label(speed_frame, text="   1024 points max, ~2000 mes/s avec NPLC=0.01",
+                                     font=('Arial', 8), foreground='gray')
+        self.buffer_help.pack(anchor='w')
+
+        # Nombre de points buffer (créé mais pas affiché initialement)
+        self.buffer_points_frame = ttk.Frame(speed_frame)
+        ttk.Label(self.buffer_points_frame, text="   Nb points:").pack(side='left')
+        self.buffer_points_var = tk.IntVar(value=1024)
+        buffer_points_spin = ttk.Spinbox(self.buffer_points_frame, from_=10, to=1024,
+                                         textvariable=self.buffer_points_var, width=8)
+        buffer_points_spin.pack(side='left', padx=5)
+
+        self.buffer_separator = ttk.Separator(speed_frame, orient='horizontal')
+        self.buffer_separator.pack(fill='x', pady=5)
+
         self.fast_mode_var = tk.BooleanVar(value=False)
-        fast_cb = ttk.Checkbutton(speed_frame, text="Mode Fast",
-                                  variable=self.fast_mode_var)
-        fast_cb.pack(anchor='w', pady=2)
-        fast_help = ttk.Label(speed_frame, text="   Réduit la communication GPIB (gain ~10-20%)",
-                              font=('Arial', 8), foreground='gray')
-        fast_help.pack(anchor='w')
+        self.fast_cb = ttk.Checkbutton(speed_frame, text="Mode Fast",
+                                       variable=self.fast_mode_var)
+        self.fast_cb.pack(anchor='w', pady=2)
+        self.fast_help = ttk.Label(speed_frame, text="   Réduit la communication GPIB (gain ~10-20%)",
+                                   font=('Arial', 8), foreground='gray')
+        self.fast_help.pack(anchor='w')
 
         self.display_off_var = tk.BooleanVar(value=False)
         display_cb = ttk.Checkbutton(speed_frame, text="Désactiver affichage instrument",
@@ -156,32 +245,37 @@ class QuickMeasureTab:
         filter_spin.pack(side='left', padx=5)
 
         # Acquisition
-        acq_frame = ttk.LabelFrame(parent, text="Acquisition", padding=10)
-        acq_frame.pack(fill='x', pady=5)
+        self.acq_frame = ttk.LabelFrame(parent, text="Acquisition", padding=10)
+        self.acq_frame.pack(fill='x', pady=5)
 
-        # Intervalle entre mesures
-        interval_frame = ttk.Frame(acq_frame)
-        interval_frame.pack(fill='x', pady=2)
+        # Intervalle entre mesures (masqué en mode buffer)
+        self.interval_frame = ttk.Frame(self.acq_frame)
+        self.interval_frame.pack(fill='x', pady=2)
 
-        ttk.Label(interval_frame, text="Intervalle (s):").pack(side='left')
+        ttk.Label(self.interval_frame, text="Intervalle (s):").pack(side='left')
         self.interval_var = tk.DoubleVar(value=0.1)
-        interval_spin = ttk.Spinbox(interval_frame, from_=0.05, to=3600, increment=0.05,
-                                    textvariable=self.interval_var, width=10, format='%.2f')
-        interval_spin.pack(side='left', padx=5)
+        self.interval_spin = ttk.Spinbox(self.interval_frame, from_=0.05, to=3600, increment=0.05,
+                                         textvariable=self.interval_var, width=10, format='%.2f')
+        self.interval_spin.pack(side='left', padx=5)
 
-        interval_help = ttk.Label(acq_frame, text="Min 0.05s (~20 mes/s max avec NPLC=0.01)",
-                                  font=('Arial', 8), foreground='gray')
-        interval_help.pack(anchor='w', padx=5)
-        
+        self.interval_help = ttk.Label(self.acq_frame, text="Min 0.05s (~20 mes/s max avec NPLC=0.01)",
+                                       font=('Arial', 8), foreground='gray')
+        self.interval_help.pack(anchor='w', padx=5)
+
+        # Message mode buffer (affiché uniquement en mode buffer)
+        self.buffer_info_label = ttk.Label(self.acq_frame,
+                                           text="Mode Buffer: acquisition au plus vite (pas d'intervalle)",
+                                           font=('Arial', 9, 'italic'), foreground='blue')
+
         # Durée maximale
-        duration_frame = ttk.Frame(acq_frame)
+        duration_frame = ttk.Frame(self.acq_frame)
         duration_frame.pack(fill='x', pady=2)
-        
+
         self.duration_mode_var = tk.StringVar(value='infinite')
-        
-        inf_rb = ttk.Radiobutton(duration_frame, text="Durée infinie", 
-                                 variable=self.duration_mode_var, value='infinite')
-        inf_rb.pack(anchor='w')
+
+        self.inf_rb = ttk.Radiobutton(duration_frame, text="Durée infinie",
+                                      variable=self.duration_mode_var, value='infinite')
+        self.inf_rb.pack(anchor='w')
         
         dur_rb = ttk.Radiobutton(duration_frame, text="Durée limitée:", 
                                  variable=self.duration_mode_var, value='limited')
@@ -243,11 +337,11 @@ class QuickMeasureTab:
 
         ttk.Label(graph_options_frame, text="Affichage:").pack(side='left', padx=5)
 
-        self.display_mode_var = tk.StringVar(value='Tout afficher')
+        self.display_mode_var = tk.StringVar(value='Autoscale')
         display_mode_combo = ttk.Combobox(graph_options_frame, textvariable=self.display_mode_var,
                                           width=20, state='readonly')
         display_mode_combo['values'] = [
-            'Tout afficher',
+            'Autoscale',
             '100 derniers points',
             '500 derniers points',
             '1000 derniers points',
@@ -265,17 +359,20 @@ class QuickMeasureTab:
         self.ax.set_ylabel('Valeur')
         self.ax.set_title('Mesure en temps réel')
         self.ax.grid(True, alpha=0.3)
-        
+
         self.line, = self.ax.plot([], [], 'b-', linewidth=1.5)
-        
+
         self.canvas = FigureCanvasTkAgg(self.fig, parent)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
-        
+
         # Barre d'outils matplotlib
         from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
         toolbar = NavigationToolbar2Tk(self.canvas, parent)
         toolbar.update()
+
+        # Logo OptiMag en bas à droite (dans la figure)
+        self._add_logo()
     
     def on_measure_type_changed(self):
         """Met à jour les calibres disponibles selon le type de mesure"""
@@ -316,16 +413,39 @@ class QuickMeasureTab:
             self.filter_frame.pack(fill='x', pady=2)
         else:
             self.filter_frame.pack_forget()
-    
+
+    def toggle_buffer_mode(self):
+        """Active/désactive le mode buffer et ajuste l'interface"""
+        if self.buffer_mode_var.get():
+            # Mode buffer activé - afficher nb points après le label d'aide
+            self.buffer_points_frame.pack(after=self.buffer_help, fill='x', pady=2)
+            self.interval_frame.pack_forget()
+            self.interval_help.pack_forget()
+            self.buffer_info_label.pack(anchor='w', padx=5, pady=2)
+            # Désactiver mode Fast (inutile en buffer)
+            self.fast_mode_var.set(False)
+            self.fast_cb.config(state='disabled')
+            # Désactiver durée infinie (buffer = nombre de points fixe)
+            self.duration_mode_var.set('limited')
+            self.inf_rb.config(state='disabled')
+        else:
+            # Mode buffer désactivé
+            self.buffer_points_frame.pack_forget()
+            self.buffer_info_label.pack_forget()
+            self.interval_frame.pack(fill='x', pady=2)
+            self.interval_help.pack(anchor='w', padx=5)
+            self.fast_cb.config(state='normal')
+            self.inf_rb.config(state='normal')
+
     def start_measurement(self):
         """Démarre l'acquisition"""
         if not self.keithley.connected:
             messagebox.showerror("Erreur", "Aucun instrument connecté!")
             return
-        
+
         # Sauvegarde de la configuration
         self.save_current_config()
-        
+
         # Configuration de l'instrument
         try:
             meas_type = self.meas_type_var.get()
@@ -335,7 +455,7 @@ class QuickMeasureTab:
 
             self.keithley.configure_measurement(meas_type, range_val)
             self.keithley.set_nplc(nplc, meas_type)
-            
+
             # Filtre
             if self.filter_var.get():
                 self.keithley.set_filter(True, self.filter_count_var.get())
@@ -346,32 +466,44 @@ class QuickMeasureTab:
             if self.display_off_var.get():
                 self.keithley.set_display(False)
 
+            # Mode buffer: désactiver autozero pour plus de vitesse
+            if self.buffer_mode_var.get():
+                self.keithley.set_autozero(False)
+
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur de configuration:\n{e}")
             return
-        
+
+        # Clear des données si nouvelles mesures
+        if len(self.data_time) > 0 and messagebox.askyesno("Nouveau démarrage",
+                                                           "Effacer les données précédentes ?"):
+            self.clear_data()
+
         # Démarrage
         self.measuring = True
         self.paused = False
         self.start_time = time.time()
-        
-        # Clear des données si nouvelles mesures
-        if len(self.data_time) > 0 and messagebox.askyesno("Nouveau démarrage", 
-                                                             "Effacer les données précédentes ?"):
-            self.clear_data()
-        
+
         # Mise à jour de l'interface
         self.start_btn.config(state='disabled')
-        self.pause_btn.config(state='normal')
         self.stop_btn.config(state='normal')
-        self.update_status("Mesure en cours...", "green")
-        
-        # Démarrage du thread de mesure
-        self.measure_thread = threading.Thread(target=self.measurement_loop, daemon=True)
+
+        if self.buffer_mode_var.get():
+            # Mode Buffer
+            self.pause_btn.config(state='disabled')  # Pas de pause en mode buffer
+            self.update_status("Acquisition buffer en cours...", "green")
+            self.measure_thread = threading.Thread(target=self.buffer_measurement_loop, daemon=True)
+        else:
+            # Mode Normal
+            self.pause_btn.config(state='normal')
+            self.update_status("Mesure en cours...", "green")
+            self.measure_thread = threading.Thread(target=self.measurement_loop, daemon=True)
+
         self.measure_thread.start()
-        
-        # Démarrage de l'animation
-        self.animate_graph()
+
+        # Démarrage de l'animation (seulement en mode normal)
+        if not self.buffer_mode_var.get():
+            self.animate_graph()
     
     def pause_measurement(self):
         """Met en pause l'acquisition"""
@@ -393,10 +525,13 @@ class QuickMeasureTab:
         if self.measure_thread and self.measure_thread.is_alive():
             self.measure_thread.join(timeout=2.0)
 
-        # Restaurer l'affichage de l'instrument si désactivé
-        if self.display_off_var.get() and self.keithley.connected:
+        # Restaurer les paramètres de l'instrument
+        if self.keithley.connected:
             try:
-                self.keithley.set_display(True)
+                if self.display_off_var.get():
+                    self.keithley.set_display(True)
+                if self.buffer_mode_var.get():
+                    self.keithley.set_autozero(True)  # Restaurer autozero
             except:
                 pass
 
@@ -446,7 +581,65 @@ class QuickMeasureTab:
             
             # Attente avant prochaine mesure
             time.sleep(interval)
-    
+
+    def buffer_measurement_loop(self):
+        """Boucle d'acquisition en mode buffer (thread séparé)"""
+        try:
+            n_points = self.buffer_points_var.get()
+
+            # Configurer et démarrer le buffer
+            self.frame.after(0, lambda: self.update_status(
+                f"Configuration buffer ({n_points} points)...", "orange"))
+
+            self.keithley.buffer_configure(n_points)
+            self.keithley.buffer_start(n_points)
+
+            self.frame.after(0, lambda: self.update_status(
+                f"Acquisition buffer en cours (0/{n_points})...", "green"))
+
+            # Attendre la fin de l'acquisition avec mise à jour du statut
+            while self.measuring:
+                current = self.keithley.buffer_get_count()
+                self.frame.after(0, lambda c=current: self.update_status(
+                    f"Acquisition buffer en cours ({c}/{n_points})...", "green"))
+
+                if self.keithley.buffer_is_complete():
+                    break
+
+                time.sleep(0.1)  # Polling toutes les 100ms
+
+            if not self.measuring:
+                # Arrêt demandé par l'utilisateur
+                return
+
+            # Lire les données du buffer
+            self.frame.after(0, lambda: self.update_status("Lecture du buffer...", "orange"))
+
+            values = self.keithley.buffer_read()
+            end_time = time.time()
+            total_duration = end_time - self.start_time
+
+            # Calculer les timestamps (répartis uniformément)
+            if len(values) > 1:
+                time_step = total_duration / (len(values) - 1)
+                for i, val in enumerate(values):
+                    self.data_time.append(i * time_step)
+                    self.data_values.append(val)
+            elif len(values) == 1:
+                self.data_time.append(0)
+                self.data_values.append(values[0])
+
+            # Mise à jour finale
+            self.frame.after(0, self.update_graph)
+            self.frame.after(0, self.update_stats)
+            self.frame.after(0, lambda: self.update_status(
+                f"Buffer terminé: {len(values)} points en {total_duration:.2f}s", "green"))
+            self.frame.after(0, self.stop_measurement)
+
+        except Exception as e:
+            self.frame.after(0, lambda: self.update_status(f"Erreur buffer: {e}", "red"))
+            self.frame.after(0, self.stop_measurement)
+
     def animate_graph(self):
         """Animation du graphique (appelé périodiquement)"""
         if self.measuring:
@@ -469,7 +662,7 @@ class QuickMeasureTab:
         # Mode d'affichage
         mode = self.display_mode_var.get()
 
-        if mode == 'Tout afficher':
+        if mode == 'Autoscale':
             # Afficher toutes les données
             self.ax.set_autoscale_on(True)
             self.ax.relim()
@@ -558,8 +751,8 @@ Dernier: {values[-1]:.6g}"""
             self.ax.relim()
             self.ax.autoscale_view(True, True, True)
             self.canvas.draw()
-            # Remettre le mode sur "Tout afficher"
-            self.display_mode_var.set('Tout afficher')
+            # Remettre le mode sur "Autoscale"
+            self.display_mode_var.set('Autoscale')
     
     def save_current_config(self):
         """Sauvegarde la configuration actuelle"""
@@ -568,11 +761,13 @@ Dernier: {values[-1]:.6g}"""
             'measurement_type': self.meas_type_var.get(),
             'range': self.range_var.get(),
             'nplc': self.nplc_var.get(),
+            'buffer_mode': self.buffer_mode_var.get(),
+            'buffer_points': self.buffer_points_var.get() if self.buffer_mode_var.get() else 0,
             'fast_mode': self.fast_mode_var.get(),
             'display_off': self.display_off_var.get(),
             'filter': self.filter_var.get(),
             'filter_count': self.filter_count_var.get() if self.filter_var.get() else 0,
-            'interval': self.interval_var.get(),
+            'interval': self.interval_var.get() if not self.buffer_mode_var.get() else 'N/A (buffer)',
             'duration_mode': self.duration_mode_var.get(),
             'max_duration': self.duration_var.get()
         }
@@ -601,6 +796,8 @@ Dernier: {values[-1]:.6g}"""
                 f.write(f"# Measurement Type: {self.current_config.get('measurement_type', 'N/A')}\n")
                 f.write(f"# Range: {self.current_config.get('range', 'N/A')}\n")
                 f.write(f"# NPLC: {self.current_config.get('nplc', 'N/A')}\n")
+                f.write(f"# Buffer Mode: {self.current_config.get('buffer_mode', 'N/A')}\n")
+                f.write(f"# Buffer Points: {self.current_config.get('buffer_points', 'N/A')}\n")
                 f.write(f"# Fast Mode: {self.current_config.get('fast_mode', 'N/A')}\n")
                 f.write(f"# Display Off: {self.current_config.get('display_off', 'N/A')}\n")
                 f.write(f"# Filter: {self.current_config.get('filter', 'N/A')}\n")

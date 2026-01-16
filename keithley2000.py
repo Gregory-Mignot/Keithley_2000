@@ -248,6 +248,78 @@ class Keithley2000:
         """
         self.write(f'SYST:BEEP {frequency}, {duration}')
     
+    def set_autozero(self, state):
+        """
+        Active/désactive l'autozero (gain de vitesse si désactivé)
+        Args:
+            state (bool): True pour activer
+        """
+        self.write(f'SYST:AZER:STAT {1 if state else 0}')
+
+    # ===== MÉTHODES BUFFER =====
+
+    def buffer_clear(self):
+        """Vide le buffer de mesures"""
+        self.write('TRAC:CLE')
+
+    def buffer_configure(self, points=1024):
+        """
+        Configure le buffer pour l'acquisition rapide
+        Args:
+            points (int): Nombre de points (max 1024 sur Keithley 2000)
+        """
+        points = min(points, 1024)  # Limite hardware
+        self.write('TRAC:CLE')
+        self.write(f'TRAC:POIN {points}')
+        self.write('TRAC:FEED SENS')
+        self.write('TRAC:FEED:CONT NEXT')
+
+    def buffer_start(self, count=1024):
+        """
+        Lance l'acquisition buffer (mesures au plus vite)
+        Args:
+            count (int): Nombre de mesures à effectuer
+        """
+        count = min(count, 1024)
+        self.write(f'TRIG:COUN {count}')
+        self.write('TRIG:SOUR IMM')  # Trigger immédiat = au plus vite
+        self.write('INIT')
+
+    def buffer_is_complete(self):
+        """
+        Vérifie si l'acquisition buffer est terminée
+        Returns:
+            bool: True si terminé
+        """
+        try:
+            actual = int(self.query('TRAC:POIN:ACT?'))
+            target = int(self.query('TRAC:POIN?'))
+            return actual >= target
+        except:
+            return False
+
+    def buffer_get_count(self):
+        """
+        Retourne le nombre de points actuellement dans le buffer
+        Returns:
+            int: Nombre de points
+        """
+        try:
+            return int(self.query('TRAC:POIN:ACT?'))
+        except:
+            return 0
+
+    def buffer_read(self):
+        """
+        Lit toutes les données du buffer
+        Returns:
+            list: Liste des valeurs mesurées
+        """
+        response = self.query('TRAC:DATA?')
+        # Réponse format: "val1,val2,val3,..."
+        values = [float(v) for v in response.split(',')]
+        return values
+
     def get_unit(self):
         """
         Récupère l'unité de mesure actuelle

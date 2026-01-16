@@ -86,3 +86,29 @@ Background thread: measure_single()/measure_fast() → Update graph via callback
 - `Readme/keithley_summary.md` - Complete feature overview
 - `Readme/install_guide.md` - Step-by-step installation
 - `keithley_2000_scpi_reference.html` - SCPI command reference (accessible from Advanced tab)
+
+## TODO - Tâches en attente (session du 16/01/2026)
+
+### Bugs à corriger
+
+1. **Logo OptiMag** - Vérifier le positionnement du logo sur la figure matplotlib (en bas à droite, sous l'axe X)
+
+2. **Modes de mesure non fonctionnels** - Seuls RES_2W (résistance 2 fils) et DCV (tension DC) fonctionnent. Les autres modes (ACV, DCI, ACI, RES_4W) génèrent des erreurs. Vérifier les commandes SCPI pour chaque type.
+
+3. **Erreur -420 en mode Fast** - Le mode Fast (`measure_fast()`) génère une erreur -420 (Query UNTERMINATED). La séquence INIT/*OPC?/FETC? ne fonctionne pas correctement.
+
+4. **Mode Buffer non fonctionnel** - Le mode Buffer génère plusieurs erreurs :
+   - Erreur -113 (Undefined header)
+   - Erreur -420 (Query UNTERMINATED)
+   - Autres erreurs non identifiées
+   - Vérifier les commandes TRAC:* et la séquence d'acquisition buffer
+
+5. **Export CSV** - L'enregistrement CSV ne fonctionne pas, problèmes de caractères (encodage ?). Vérifier l'encodage UTF-8 et les caractères spéciaux (°, Ω, etc.)
+
+### Améliorations demandées
+
+6. **Clear pendant la mesure** - Permettre d'effacer le graphique (Clear) même pendant une acquisition en cours
+
+7. **Zoom amélioré** - Ajouter la possibilité de définir manuellement les valeurs min/max des axes du graphique
+
+8. **Curseur/réticule** - Ajouter un curseur ou réticule "snappé" à la courbe pour lire précisément les valeurs (crosshair suivant la souris, affichant les coordonnées X/Y du point le plus proche)

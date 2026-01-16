@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Keithley 2000 - Commandes SCPI</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        h1 { color: #003366; }
+        h2 { color: #0066cc; margin-top: 30px; }
+        .command { background: white; padding: 10px; margin: 10px 0; border-left: 4px solid #0066cc; }
+        .cmd-name { font-family: 'Courier New', monospace; font-weight: bold; color: #cc0000; }
+        .description { margin-top: 5px; }
+        .example { background: #f0f0f0; padding: 5px; margin-top: 5px; font-family: 'Courier New', monospace; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; background: white; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #0066cc; color: white; }
+    </style>
+</head>
+<body>
+    <h1>📘 Keithley 2000 - Référence des Commandes SCPI</h1>
+    
+    <h2>🔧 Commandes Système</h2>
+    
+    <div class="command">
+        <div class="cmd-name">*IDN?</div>
+        <div class="description">Retourne l'identification de l'instrument</div>
+        <div class="example">Exemple: *IDN?<br>Réponse: KEITHLEY INSTRUMENTS INC.,MODEL 2000,...</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">*RST</div>
+        <div class="description">Reset de l'instrument aux paramètres par défaut</div>
+        <div class="example">Exemple: *RST</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">*CLS</div>
+        <div class="description">Efface tous les registres d'erreur et de statut</div>
+        <div class="example">Exemple: *CLS</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">SYST:ERR?</div>
+        <div class="description">Lit la prochaine erreur dans la file d'attente</div>
+        <div class="example">Exemple: SYST:ERR?<br>Réponse: 0,"No error"</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">SYST:LOC</div>
+        <div class="description">Place l'instrument en mode local (déverrouille le panneau avant)</div>
+        <div class="example">Exemple: SYST:LOC</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">SYST:REM</div>
+        <div class="description">Place l'instrument en mode remote (verrouille le panneau avant)</div>
+        <div class="example">Exemple: SYST:REM</div>
+    </div>
+    
+    <h2>📊 Configuration de Mesure</h2>
+    
+    <div class="command">
+        <div class="cmd-name">CONF:VOLT:DC [range], [resolution]</div>
+        <div class="description">Configure la mesure de tension DC</div>
+        <div class="example">Exemple: CONF:VOLT:DC 10, 0.001<br>Configure tension DC, plage 10V, résolution 1mV</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">CONF:VOLT:AC [range], [resolution]</div>
+        <div class="description">Configure la mesure de tension AC</div>
+        <div class="example">Exemple: CONF:VOLT:AC AUTO</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">CONF:CURR:DC [range], [resolution]</div>
+        <div class="description">Configure la mesure de courant DC</div>
+        <div class="example">Exemple: CONF:CURR:DC 1, 0.0001</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">CONF:RES [range], [resolution]</div>
+        <div class="description">Configure la mesure de résistance 2 fils</div>
+        <div class="example">Exemple: CONF:RES AUTO</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">CONF:FRES [range], [resolution]</div>
+        <div class="description">Configure la mesure de résistance 4 fils</div>
+        <div class="example">Exemple: CONF:FRES 1000</div>
+    </div>
+    
+    <h2>⚙️ Paramètres de Mesure</h2>
+    
+    <div class="command">
+        <div class="cmd-name">[FUNC]:RANG:AUTO ON|OFF</div>
+        <div class="description">Active/désactive l'auto-range</div>
+        <div class="example">Exemple: VOLT:DC:RANG:AUTO ON</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">[FUNC]:RANG [value]</div>
+        <div class="description">Définit la plage de mesure</div>
+        <div class="example">Exemple: VOLT:DC:RANG 10<br>Plage fixe de 10V</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">[FUNC]:NPLC [value]</div>
+        <div class="description">Définit le temps d'intégration (0.01 à 10 PLC)<br>
+        0.01 = rapide mais bruyant, 10 = lent mais précis</div>
+        <div class="example">Exemple: VOLT:DC:NPLC 1<br>1 cycle secteur (20ms à 50Hz)</div>
+    </div>
+    
+    <h2>🎯 Déclenchement (Trigger)</h2>
+    
+    <div class="command">
+        <div class="cmd-name">TRIG:SOUR IMM|BUS|EXT|TIM</div>
+        <div class="description">Définit la source de déclenchement<br>
+        IMM = Immédiat, BUS = Bus GPIB, EXT = Trigger externe, TIM = Timer</div>
+        <div class="example">Exemple: TRIG:SOUR IMM</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">INIT</div>
+        <div class="description">Déclenche une mesure</div>
+        <div class="example">Exemple: INIT</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">*TRG</div>
+        <div class="description">Envoie un trigger bus</div>
+        <div class="example">Exemple: *TRG</div>
+    </div>
+    
+    <h2>📖 Lecture de Données</h2>
+    
+    <div class="command">
+        <div class="cmd-name">READ?</div>
+        <div class="description">Déclenche une mesure et lit le résultat (combinaison INIT + FETCH)</div>
+        <div class="example">Exemple: READ?<br>Réponse: +1.234567890E+01</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">FETC?</div>
+        <div class="description">Lit la dernière mesure (sans déclencher de nouvelle mesure)</div>
+        <div class="example">Exemple: FETC?<br>Plus rapide que READ?</div>
+    </div>
+    
+    <h2>🔢 Filtrage</h2>
+    
+    <div class="command">
+        <div class="cmd-name">AVER:STAT ON|OFF</div>
+        <div class="description">Active/désactive le filtre numérique</div>
+        <div class="example">Exemple: AVER:STAT ON</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">AVER:COUN [value]</div>
+        <div class="description">Définit le nombre de mesures à moyenner (2-100)</div>
+        <div class="example">Exemple: AVER:COUN 10</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">AVER:TCON MOV|REP</div>
+        <div class="description">Type de filtre: MOV = moyenne mobile, REP = répétitif</div>
+        <div class="example">Exemple: AVER:TCON MOV</div>
+    </div>
+    
+    <h2>🖥️ Affichage</h2>
+    
+    <div class="command">
+        <div class="cmd-name">DISP:ENAB ON|OFF</div>
+        <div class="description">Active/désactive l'affichage (le désactiver accélère les mesures)</div>
+        <div class="example">Exemple: DISP:ENAB OFF</div>
+    </div>
+    
+    <h2>📝 Buffer de Données</h2>
+    
+    <div class="command">
+        <div class="cmd-name">TRAC:CLE</div>
+        <div class="description">Efface le buffer de données</div>
+        <div class="example">Exemple: TRAC:CLE</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">TRAC:POIN [count]</div>
+        <div class="description">Définit la taille du buffer (1-2000)</div>
+        <div class="example">Exemple: TRAC:POIN 100</div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">TRAC:DATA?</div>
+        <div class="description">Lit toutes les données du buffer</div>
+        <div class="example">Exemple: TRAC:DATA?</div>
+    </div>
+    
+    <h2>🔔 Utilitaires</h2>
+    
+    <div class="command">
+        <div class="cmd-name">SYST:BEEP [freq], [time]</div>
+        <div class="description">Émet un bip (fréquence en Hz, durée en secondes)</div>
+        <div class="example">Exemple: SYST:BEEP 1000, 0.5<br>Bip de 1kHz pendant 0.5s</div>
+    </div>
+    
+    <h2>📊 Tableaux de Référence</h2>
+    
+    <h3>Plages de Mesure</h3>
+    <table>
+        <tr><th>Fonction</th><th>Plages Disponibles</th></tr>
+        <tr><td>Tension DC</td><td>100mV, 1V, 10V, 100V, 1000V</td></tr>
+        <tr><td>Tension AC</td><td>100mV, 1V, 10V, 100V, 750V</td></tr>
+        <tr><td>Courant DC</td><td>10µA, 100µA, 1mA, 10mA, 100mA, 1A, 3A</td></tr>
+        <tr><td>Courant AC</td><td>100µA, 1mA, 10mA, 100mA, 1A, 3A</td></tr>
+        <tr><td>Résistance</td><td>100Ω, 1kΩ, 10kΩ, 100kΩ, 1MΩ, 10MΩ, 100MΩ</td></tr>
+    </table>
+    
+    <h3>Valeurs NPLC Recommandées</h3>
+    <table>
+        <tr><th>NPLC</th><th>Temps (50Hz)</th><th>Usage</th></tr>
+        <tr><td>0.01</td><td>0.2ms</td><td>Mesures très rapides, bruyantes</td></tr>
+        <tr><td>0.1</td><td>2ms</td><td>Mesures rapides</td></tr>
+        <tr><td>1</td><td>20ms</td><td>Standard (bon compromis)</td></tr>
+        <tr><td>5</td><td>100ms</td><td>Mesures précises</td></tr>
+        <tr><td>10</td><td>200ms</td><td>Mesures très précises</td></tr>
+    </table>
+    
+    <h2>💡 Exemples de Séquences</h2>
+    
+    <div class="command">
+        <div class="cmd-name">Mesure rapide de tension DC</div>
+        <div class="example">
+*RST<br>
+CONF:VOLT:DC 10<br>
+VOLT:DC:NPLC 0.1<br>
+DISP:ENAB OFF<br>
+READ?
+        </div>
+    </div>
+    
+    <div class="command">
+        <div class="cmd-name">Mesure précise de résistance 4 fils</div>
+        <div class="example">
+*RST<br>
+CONF:FRES AUTO<br>
+FRES:NPLC 10<br>
+AVER:STAT ON<br>
+AVER:COUN 10<br>
+READ?
+        </div>
+    </div>
+    
+</body>
+</html>

@@ -1,0 +1,30 @@
+# Keithley 2000 Controller - Dépendances Python
+# 
+# Installation depuis Internet:
+#   pip install -r requirements.txt
+#
+# Installation depuis fichiers locaux (wheels):
+#   pip install --no-index --find-links=Requirements/wheels -r requirements.txt
+#
+# Télécharger les wheels pour installation offline:
+#   pip download -r requirements.txt -d Requirements/wheels
+
+# Communication GPIB/VISA
+pyvisa>=1.13.0
+pyvisa-py>=0.7.0
+
+# Graphiques et analyse
+matplotlib>=3.7.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Interface graphique (tkinter est inclus avec Python standard sur Windows)
+
+# Optionnel : Backend VISA pour National Instruments
+# Décommenter si vous utilisez du matériel NI au lieu d'Agilent/Keysight
+# pyvisa-ni>=0.3.0
+
+# Note importante:
+# Les drivers Agilent/Keysight GPIB doivent être installés séparément
+# Télécharger depuis: https://www.keysight.com/
+# Chercher: "IO Libraries Suite"

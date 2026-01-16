@@ -1,0 +1,274 @@
+"""
+Classe de contrôle du Keithley 2000
+Gère toutes les communications VISA et commandes SCPI
+"""
+import pyvisa
+from pyvisa.errors import VisaIOError
+import time
+
+class Keithley2000:
+    """Classe pour contrôler le multimètre Keithley 2000 via VISA"""
+    
+    # Types de mesures supportés
+    MEASURE_TYPES = {
+        'DCV': 'VOLT:DC',
+        'ACV': 'VOLT:AC',
+        'DCI': 'CURR:DC',
+        'ACI': 'CURR:AC',
+        'RES_2W': 'RES',
+        'RES_4W': 'FRES',
+        'FREQ': 'FREQ',
+        'PERIOD': 'PER',
+        'TEMP': 'TEMP',
+        'DIODE': 'DIOD',
+        'CONT': 'CONT'
+    }
+    
+    def __init__(self, gpib_address=None, timeout=5000):
+        """
+        Initialise la connexion au Keithley 2000
+        Args:
+            gpib_address (str): Adresse GPIB (ex: 'GPIB0::16::INSTR')
+            timeout (int): Timeout en millisecondes
+        """
+        self.meter = None
+        self.connected = False
+        self.timeout = timeout
+        
+        if gpib_address:
+            self.connect(gpib_address)
+    
+    def connect(self, gpib_address):
+        """
+        Établit la connexion avec l'instrument
+        Args:
+            gpib_address (str): Adresse GPIB
+        Returns:
+            bool: True si connexion réussie
+        """
+        try:
+            rm = pyvisa.ResourceManager()
+            self.meter = rm.open_resource(gpib_address)
+            self.meter.timeout = self.timeout
+            self.connected = True
+            return True
+        except VisaIOError as e:
+            self.connected = False
+            raise Exception(f"Erreur de connexion GPIB: {e}")
+    
+    def disconnect(self):
+        """Ferme la connexion"""
+        if self.meter:
+            try:
+                self.write('SYST:LOC')  # Retour en mode local
+                self.meter.close()
+            except:
+                pass
+        self.connected = False
+    
+    def write(self, command):
+        """
+        Envoie une commande SCPI
+        Args:
+            command (str): Commande SCPI
+        """
+        if not self.connected:
+            raise Exception("Instrument non connecté")
+        try:
+            self.meter.write(command)
+        except VisaIOError as e:
+            raise Exception(f"Erreur d'écriture: {e}")
+    
+    def query(self, command):
+        """
+        Envoie une commande et lit la réponse
+        Args:
+            command (str): Commande SCPI
+        Returns:
+            str: Réponse de l'instrument
+        """
+        if not self.connected:
+            raise Exception("Instrument non connecté")
+        try:
+            return self.meter.query(command).strip()
+        except VisaIOError as e:
+            raise Exception(f"Erreur de lecture: {e}")
+    
+    def read(self):
+        """
+        Lit une réponse de l'instrument
+        Returns:
+            str: Réponse
+        """
+        if not self.connected:
+            raise Exception("Instrument non connecté")
+        try:
+            return self.meter.read().strip()
+        except VisaIOError as e:
+            raise Exception(f"Erreur de lecture: {e}")
+    
+    def get_id(self):
+        """
+        Récupère l'identification de l'instrument
+        Returns:
+            str: Chaîne d'identification
+        """
+        return self.query('*IDN?')
+    
+    def reset(self):
+        """Reset de l'instrument"""
+        self.write('*RST')
+        time.sleep(0.5)
+    
+    def configure_measurement(self, meas_type, range_val='AUTO', resolution=None):
+        """
+        Configure le type de mesure
+        Args:
+            meas_type (str): Type de mesure (clé de MEASURE_TYPES)
+            range_val (str/float): 'AUTO' ou valeur numérique
+            resolution (float): Résolution (0.0001 à 1)
+        """
+        if meas_type not in self.MEASURE_TYPES:
+            raise ValueError(f"Type de mesure invalide: {meas_type}")
+        
+        func = self.MEASURE_TYPES[meas_type]
+        
+        # Configuration de base
+        self.write(f'CONF:{func}')
+        
+        # Configuration de la plage
+        if range_val == 'AUTO':
+            self.write(f'{func}:RANG:AUTO ON')
+        else:
+            self.write(f'{func}:RANG:AUTO OFF')
+            self.write(f'{func}:RANG {range_val}')
+        
+        # Configuration de la résolution
+        if resolution:
+            self.write(f'{func}:NPLC {resolution}')
+    
+    def set_nplc(self, nplc):
+        """
+        Configure le NPLC (Number of Power Line Cycles)
+        Args:
+            nplc (float): 0.01 à 10 (vitesse vs précision)
+        """
+        self.write(f'NPLC {nplc}')
+    
+    def set_filter(self, state, count=10, filter_type='MOV'):
+        """
+        Configure le filtrage numérique
+        Args:
+            state (bool): Active/désactive le filtre
+            count (int): Nombre de mesures pour le filtre
+            filter_type (str): 'MOV' (moving average) ou 'REP' (repeat)
+        """
+        if state:
+            self.write(f'AVER:TCON {filter_type}')
+            self.write(f'AVER:COUN {count}')
+            self.write('AVER:STAT ON')
+        else:
+            self.write('AVER:STAT OFF')
+    
+    def set_trigger_source(self, source='IMM'):
+        """
+        Configure la source de déclenchement
+        Args:
+            source (str): 'IMM', 'BUS', 'EXT', 'TIM'
+        """
+        self.write(f'TRIG:SOUR {source}')
+    
+    def measure_single(self):
+        """
+        Effectue une mesure unique
+        Returns:
+            float: Valeur mesurée
+        """
+        response = self.query('READ?')
+        return float(response)
+    
+    def measure_fast(self):
+        """
+        Mesure rapide sans vérification d'erreur
+        Returns:
+            float: Valeur mesurée
+        """
+        response = self.query('FETC?')
+        return float(response)
+    
+    def initiate_measurement(self):
+        """Déclenche une mesure"""
+        self.write('INIT')
+    
+    def fetch_measurement(self):
+        """
+        Récupère la dernière mesure
+        Returns:
+            float: Valeur mesurée
+        """
+        response = self.query('FETC?')
+        return float(response)
+    
+    def get_error(self):
+        """
+        Vérifie les erreurs
+        Returns:
+            str: Message d'erreur
+        """
+        return self.query('SYST:ERR?')
+    
+    def clear_errors(self):
+        """Efface les erreurs"""
+        self.write('*CLS')
+    
+    def set_display(self, state):
+        """
+        Active/désactive l'affichage
+        Args:
+            state (bool): True pour activer
+        """
+        self.write(f'DISP:ENAB {1 if state else 0}')
+    
+    def beep(self, frequency=1000, duration=0.1):
+        """
+        Émet un bip
+        Args:
+            frequency (int): Fréquence en Hz
+            duration (float): Durée en secondes
+        """
+        self.write(f'SYST:BEEP {frequency}, {duration}')
+    
+    def get_unit(self):
+        """
+        Récupère l'unité de mesure actuelle
+        Returns:
+            str: Unité
+        """
+        func = self.query('FUNC?').strip('"')
+        units = {
+            'VOLT:DC': 'V',
+            'VOLT:AC': 'V',
+            'CURR:DC': 'A',
+            'CURR:AC': 'A',
+            'RES': 'Ω',
+            'FRES': 'Ω',
+            'FREQ': 'Hz',
+            'PER': 's',
+            'TEMP': '°C',
+            'DIOD': 'V',
+            'CONT': 'Ω'
+        }
+        return units.get(func, '')
+    
+    @staticmethod
+    def list_resources():
+        """
+        Liste toutes les ressources VISA disponibles
+        Returns:
+            list: Liste des adresses VISA
+        """
+        try:
+            rm = pyvisa.ResourceManager()
+            return list(rm.list_resources())
+        except:
+            return []

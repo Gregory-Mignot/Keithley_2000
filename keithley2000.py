@@ -147,13 +147,21 @@ class Keithley2000:
         if resolution:
             self.write(f'{func}:NPLC {resolution}')
     
-    def set_nplc(self, nplc):
+    def set_nplc(self, nplc, meas_type=None):
         """
         Configure le NPLC (Number of Power Line Cycles)
         Args:
             nplc (float): 0.01 à 10 (vitesse vs précision)
+            meas_type (str): Type de mesure (si None, utilise la fonction courante)
         """
-        self.write(f'NPLC {nplc}')
+        if meas_type:
+            func = self.MEASURE_TYPES.get(meas_type)
+        else:
+            # Récupérer la fonction courante
+            func = self.query('FUNC?').strip('"')
+
+        if func:
+            self.write(f'{func}:NPLC {nplc}')
     
     def set_filter(self, state, count=10, filter_type='MOV'):
         """
@@ -189,10 +197,12 @@ class Keithley2000:
     
     def measure_fast(self):
         """
-        Mesure rapide sans vérification d'erreur
+        Mesure rapide: initie, attend la fin, et récupère la mesure
         Returns:
             float: Valeur mesurée
         """
+        self.write('INIT')
+        self.query('*OPC?')  # Attend la fin de la mesure
         response = self.query('FETC?')
         return float(response)
     
@@ -261,14 +271,35 @@ class Keithley2000:
         return units.get(func, '')
     
     @staticmethod
-    def list_resources():
+    def list_resources(verify=True, timeout=1000):
         """
-        Liste toutes les ressources VISA disponibles
+        Liste les ressources VISA disponibles
+        Args:
+            verify (bool): Si True, vérifie que l'instrument répond (*IDN?)
+            timeout (int): Timeout en ms pour la vérification
         Returns:
-            list: Liste des adresses VISA
+            list: Liste des adresses VISA (avec instruments qui répondent si verify=True)
         """
         try:
             rm = pyvisa.ResourceManager()
-            return list(rm.list_resources())
+            all_resources = list(rm.list_resources())
+
+            if not verify:
+                return all_resources
+
+            # Vérifier chaque ressource
+            verified_resources = []
+            for resource in all_resources:
+                try:
+                    instr = rm.open_resource(resource)
+                    instr.timeout = timeout
+                    instr.query('*IDN?')
+                    instr.close()
+                    verified_resources.append(resource)
+                except:
+                    # L'instrument ne répond pas, on l'ignore
+                    pass
+
+            return verified_resources
         except:
             return []

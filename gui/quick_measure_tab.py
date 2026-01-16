@@ -107,15 +107,20 @@ class QuickMeasureTab:
         # Options vitesse
         speed_frame = ttk.LabelFrame(parent, text="Options Vitesse", padding=10)
         speed_frame.pack(fill='x', pady=5)
-        
+
         self.fast_mode_var = tk.BooleanVar(value=False)
-        fast_cb = ttk.Checkbutton(speed_frame, text="Mode Fast (désactive vérifications)", 
+        fast_cb = ttk.Checkbutton(speed_frame, text="Mode Fast (INIT/FETC)",
                                   variable=self.fast_mode_var)
         fast_cb.pack(anchor='w', pady=2)
-        
+
+        self.display_off_var = tk.BooleanVar(value=False)
+        display_cb = ttk.Checkbutton(speed_frame, text="Désactiver affichage instrument",
+                                     variable=self.display_off_var)
+        display_cb.pack(anchor='w', pady=2)
+
         self.filter_var = tk.BooleanVar(value=False)
-        filter_cb = ttk.Checkbutton(speed_frame, text="Filtre numérique", 
-                                    variable=self.filter_var, 
+        filter_cb = ttk.Checkbutton(speed_frame, text="Filtre numérique",
+                                    variable=self.filter_var,
                                     command=self.toggle_filter)
         filter_cb.pack(anchor='w', pady=2)
         
@@ -264,14 +269,18 @@ class QuickMeasureTab:
             nplc = self.nplc_var.get()
             
             self.keithley.configure_measurement(meas_type, range_val)
-            self.keithley.set_nplc(nplc)
+            self.keithley.set_nplc(nplc, meas_type)
             
             # Filtre
             if self.filter_var.get():
                 self.keithley.set_filter(True, self.filter_count_var.get())
             else:
                 self.keithley.set_filter(False)
-            
+
+            # Affichage instrument
+            if self.display_off_var.get():
+                self.keithley.set_display(False)
+
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur de configuration:\n{e}")
             return
@@ -314,17 +323,24 @@ class QuickMeasureTab:
         """Arrête l'acquisition"""
         self.measuring = False
         self.paused = False
-        
+
         # Attendre la fin du thread
         if self.measure_thread and self.measure_thread.is_alive():
             self.measure_thread.join(timeout=2.0)
-        
+
+        # Restaurer l'affichage de l'instrument si désactivé
+        if self.display_off_var.get() and self.keithley.connected:
+            try:
+                self.keithley.set_display(True)
+            except:
+                pass
+
         # Mise à jour de l'interface
         self.start_btn.config(state='normal')
         self.pause_btn.config(state='disabled', text="⏸ Pause")
         self.stop_btn.config(state='disabled')
         self.update_status("Mesure arrêtée", "orange")
-        
+
         # Mise à jour finale du graphique et des stats
         self.update_graph()
         self.update_stats()
@@ -377,25 +393,38 @@ class QuickMeasureTab:
         """Met à jour le graphique"""
         if len(self.data_time) == 0:
             return
-        
+
         # Conversion en arrays numpy
         x_data = np.array(self.data_time)
         y_data = np.array(self.data_values)
-        
+
         # Mise à jour de la ligne
         self.line.set_data(x_data, y_data)
-        
+
         # Autoscale ou scroll
         if self.autoscale_var.get():
+            # Réactiver l'autoscale sur les deux axes
+            self.ax.set_autoscale_on(True)
             self.ax.relim()
-            self.ax.autoscale_view()
+            self.ax.autoscale_view(True, True, True)
         elif self.scroll_var.get():
             # Défilement: garder les 100 derniers points visibles
             if len(x_data) > 100:
                 x_min = x_data[-100]
                 x_max = x_data[-1]
-                self.ax.set_xlim(x_min, x_max)
-        
+                # Trouver les Y min/max pour les points visibles
+                visible_mask = x_data >= x_min
+                visible_y = y_data[visible_mask]
+                if len(visible_y) > 0:
+                    y_min, y_max = np.min(visible_y), np.max(visible_y)
+                    margin = (y_max - y_min) * 0.1 if y_max != y_min else 0.1
+                    self.ax.set_xlim(x_min, x_max)
+                    self.ax.set_ylim(y_min - margin, y_max + margin)
+            else:
+                # Moins de 100 points: afficher tout
+                self.ax.relim()
+                self.ax.autoscale_view()
+
         # Rafraîchissement
         self.canvas.draw_idle()
     
@@ -437,9 +466,13 @@ Dernier:{values[-1]:.6g}"""
     def reset_zoom(self):
         """Réinitialise le zoom du graphique"""
         if len(self.data_time) > 0:
+            # Réactiver l'autoscale
+            self.ax.set_autoscale_on(True)
             self.ax.relim()
-            self.ax.autoscale_view()
+            self.ax.autoscale_view(True, True, True)
             self.canvas.draw()
+            # Réactiver la case autoscale
+            self.autoscale_var.set(True)
     
     def save_current_config(self):
         """Sauvegarde la configuration actuelle"""
@@ -449,6 +482,7 @@ Dernier:{values[-1]:.6g}"""
             'range': self.range_var.get(),
             'nplc': self.nplc_var.get(),
             'fast_mode': self.fast_mode_var.get(),
+            'display_off': self.display_off_var.get(),
             'filter': self.filter_var.get(),
             'filter_count': self.filter_count_var.get() if self.filter_var.get() else 0,
             'interval': self.interval_var.get(),
@@ -481,6 +515,7 @@ Dernier:{values[-1]:.6g}"""
                 f.write(f"# Range: {self.current_config.get('range', 'N/A')}\n")
                 f.write(f"# NPLC: {self.current_config.get('nplc', 'N/A')}\n")
                 f.write(f"# Fast Mode: {self.current_config.get('fast_mode', 'N/A')}\n")
+                f.write(f"# Display Off: {self.current_config.get('display_off', 'N/A')}\n")
                 f.write(f"# Filter: {self.current_config.get('filter', 'N/A')}\n")
                 f.write(f"# Filter Count: {self.current_config.get('filter_count', 'N/A')}\n")
                 f.write(f"# Sample Interval: {self.current_config.get('interval', 'N/A')} s\n")

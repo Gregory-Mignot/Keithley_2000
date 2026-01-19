@@ -91,24 +91,22 @@ Background thread: measure_single()/measure_fast() → Update graph via callback
 
 ### Bugs à corriger
 
-1. **Logo OptiMag** - Vérifier le positionnement du logo sur la figure matplotlib (en bas à droite, sous l'axe X)
+1. **Logo OptiMag** - ✏️ *À tester in situ* - Correction avec `AnnotationBbox` + coordonnées relatives dans `gui/quick_measure_tab.py:90`
 
-2. **Modes de mesure non fonctionnels** - Seuls RES_2W (résistance 2 fils) et DCV (tension DC) fonctionnent. Les autres modes (ACV, DCI, ACI, RES_4W) génèrent des erreurs. Vérifier les commandes SCPI pour chaque type.
+2. **Modes de mesure non fonctionnels** - ✏️ *À tester in situ* - Ajout `NPLC_SUPPORTED` et `RANGE_SUPPORTED` dans `keithley2000.py` pour éviter les commandes SCPI invalides sur ACV/ACI
 
-3. **Erreur -420 en mode Fast** - Le mode Fast (`measure_fast()`) génère une erreur -420 (Query UNTERMINATED). La séquence INIT/*OPC?/FETC? ne fonctionne pas correctement.
+3. **Erreur -420 en mode Fast** - ✏️ *À tester in situ* - Remplacé par `INIT;:FETC?` (une seule commande) dans `keithley2000.py:219`
 
-4. **Mode Buffer non fonctionnel** - Le mode Buffer génère plusieurs erreurs :
-   - Erreur -113 (Undefined header)
-   - Erreur -420 (Query UNTERMINATED)
-   - Autres erreurs non identifiées
-   - Vérifier les commandes TRAC:* et la séquence d'acquisition buffer
+4. **Mode Buffer non fonctionnel** - ✏️ *À tester in situ* - Refonte complète des méthodes buffer dans `keithley2000.py:274-356` (séquence SCPI corrigée, SENS1, délais, gestion status)
 
-5. **Export CSV** - L'enregistrement CSV ne fonctionne pas, problèmes de caractères (encodage ?). Vérifier l'encodage UTF-8 et les caractères spéciaux (°, Ω, etc.)
+5. **Export CSV** - ✏️ *À tester in situ* - Correction appliquée : ajout `encoding='utf-8-sig'` et `newline=''` dans `gui/quick_measure_tab.py:792`
 
 ### Améliorations demandées
 
-6. **Clear pendant la mesure** - Permettre d'effacer le graphique (Clear) même pendant une acquisition en cours
+6. **Clear pendant la mesure** - ✏️ *À tester in situ* - Correction appliquée : confirmation + reset `start_time` dans `gui/quick_measure_tab.py:732`
 
-7. **Zoom amélioré** - Ajouter la possibilité de définir manuellement les valeurs min/max des axes du graphique
+7. **Zoom amélioré** - ✏️ *À tester in situ* - Nouveau mode "Manuel (limites fixes)" avec champs X/Y min/max dans `gui/quick_measure_tab.py`
 
-8. **Curseur/réticule** - Ajouter un curseur ou réticule "snappé" à la courbe pour lire précisément les valeurs (crosshair suivant la souris, affichant les coordonnées X/Y du point le plus proche)
+8. **Curseur/réticule** - ✏️ *À tester in situ* - Checkbox "Curseur" + crosshair snappé avec annotation X/Y dans `gui/quick_measure_tab.py`
+
+9. **Export données visibles** - ✏️ *À tester in situ* - Bouton "Export visible" sous le graphique pour exporter uniquement les points dans la plage de zoom actuelle (`gui/quick_measure_tab.py:973`)

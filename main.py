@@ -17,7 +17,10 @@ def main():
     root = tk.Tk()
     root.title("Keithley 2000")
     root.geometry("1200x800")
-    
+
+    # Ouvrir en plein écran (maximisé) au démarrage
+    root.state('zoomed')
+
     # Icône de la fenêtre (optionnel)
     try:
         root.iconbitmap('icone.ico')

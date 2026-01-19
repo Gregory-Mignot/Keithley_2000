@@ -88,7 +88,7 @@ class QuickMeasureTab:
         self.config_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def _add_logo(self):
-        """Ajoute le logo OptiMag dans la figure, sous l'axe X (coin droit)"""
+        """Ajoute le logo OptiMag dans la figure, en bas à droite (sous l'axe X)"""
         try:
             from PIL import Image
 
@@ -100,8 +100,8 @@ class QuickMeasureTab:
                 # Charger et redimensionner avec PIL
                 pil_image = Image.open(logo_path)
 
-                # Redimensionner pour une hauteur de ~35 pixels
-                target_height = 35
+                # Redimensionner pour une hauteur de ~30 pixels
+                target_height = 30
                 aspect = pil_image.width / pil_image.height
                 new_width = int(target_height * aspect)
                 pil_image = pil_image.resize((new_width, target_height), Image.LANCZOS)
@@ -110,15 +110,17 @@ class QuickMeasureTab:
                 logo = np.array(pil_image)
 
                 # Ajuster la figure pour laisser de la place en bas
-                self.fig.subplots_adjust(bottom=0.15)
+                self.fig.subplots_adjust(bottom=0.12)
 
-                # Position en bas à droite (en pixels depuis le coin bas-gauche)
-                fig_width = self.fig.get_figwidth() * self.fig.dpi
-                x_pos = int(fig_width - new_width - 10)
-                y_pos = 5
-
-                # Ajouter l'image à la figure
-                self.fig.figimage(logo, xo=x_pos, yo=y_pos, alpha=0.8, zorder=10)
+                # Utiliser AnnotationBbox pour un positionnement relatif
+                # Coordonnées en fraction de figure (0-1): bas-droite = (0.98, 0.01)
+                imagebox = OffsetImage(logo, zoom=1.0, alpha=0.8)
+                ab = AnnotationBbox(imagebox, (0.98, 0.01),
+                                   xycoords='figure fraction',
+                                   boxcoords='figure fraction',
+                                   box_alignment=(1.0, 0.0),  # Ancrage bas-droite
+                                   frameon=False)
+                self.fig.add_artist(ab)
 
         except Exception as e:
             # Si le logo ne peut pas être chargé, on continue sans
@@ -332,25 +334,70 @@ class QuickMeasureTab:
         """Crée la section graphique"""
         
         # Options graphique
-        graph_options_frame = ttk.Frame(parent)
-        graph_options_frame.pack(fill='x', pady=5)
+        self.graph_options_frame = ttk.Frame(parent)
+        self.graph_options_frame.pack(fill='x', pady=5)
 
-        ttk.Label(graph_options_frame, text="Affichage:").pack(side='left', padx=5)
+        ttk.Label(self.graph_options_frame, text="Affichage:").pack(side='left', padx=5)
 
         self.display_mode_var = tk.StringVar(value='Autoscale')
-        display_mode_combo = ttk.Combobox(graph_options_frame, textvariable=self.display_mode_var,
+        display_mode_combo = ttk.Combobox(self.graph_options_frame, textvariable=self.display_mode_var,
                                           width=20, state='readonly')
         display_mode_combo['values'] = [
             'Autoscale',
             '100 derniers points',
             '500 derniers points',
             '1000 derniers points',
-            'Manuel (zoom libre)'
+            'Manuel (zoom libre)',
+            'Manuel (limites fixes)',
+            'Fixe X, Auto Y',
+            'Auto X, Fixe Y'
         ]
         display_mode_combo.pack(side='left', padx=5)
+        display_mode_combo.bind('<<ComboboxSelected>>', self.on_display_mode_changed)
 
-        ttk.Button(graph_options_frame, text="Zoom Reset",
+        ttk.Button(self.graph_options_frame, text="Zoom Reset",
                   command=self.reset_zoom).pack(side='left', padx=5)
+
+        # Checkbox curseur
+        self.cursor_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(self.graph_options_frame, text="Curseur",
+                       variable=self.cursor_var,
+                       command=self.toggle_cursor).pack(side='left', padx=10)
+
+        # Bouton export données visibles
+        ttk.Button(self.graph_options_frame, text="Export visible",
+                  command=self.export_visible_data).pack(side='left', padx=5)
+
+        # Frame pour les limites manuelles (masquée par défaut) - tout sur une ligne
+        self.manual_limits_frame = ttk.Frame(parent)
+
+        # X min/max
+        ttk.Label(self.manual_limits_frame, text="X:").pack(side='left', padx=(5, 2))
+        self.x_min_var = tk.StringVar(value='0')
+        ttk.Entry(self.manual_limits_frame, textvariable=self.x_min_var, width=8).pack(side='left', padx=2)
+        ttk.Label(self.manual_limits_frame, text="à").pack(side='left')
+        self.x_max_var = tk.StringVar(value='100')
+        ttk.Entry(self.manual_limits_frame, textvariable=self.x_max_var, width=8).pack(side='left', padx=2)
+        ttk.Button(self.manual_limits_frame, text="X", width=2,
+                  command=lambda: self.apply_manual_limits('x')).pack(side='left', padx=2)
+
+        # Séparateur
+        ttk.Label(self.manual_limits_frame, text=" | ").pack(side='left')
+
+        # Y min/max
+        ttk.Label(self.manual_limits_frame, text="Y:").pack(side='left', padx=(2, 2))
+        self.y_min_var = tk.StringVar(value='0')
+        ttk.Entry(self.manual_limits_frame, textvariable=self.y_min_var, width=8).pack(side='left', padx=2)
+        ttk.Label(self.manual_limits_frame, text="à").pack(side='left')
+        self.y_max_var = tk.StringVar(value='10')
+        ttk.Entry(self.manual_limits_frame, textvariable=self.y_max_var, width=8).pack(side='left', padx=2)
+        ttk.Button(self.manual_limits_frame, text="Y", width=2,
+                  command=lambda: self.apply_manual_limits('y')).pack(side='left', padx=2)
+
+        # Séparateur + bouton X+Y
+        ttk.Label(self.manual_limits_frame, text=" | ").pack(side='left')
+        ttk.Button(self.manual_limits_frame, text="X+Y",
+                  command=lambda: self.apply_manual_limits('xy')).pack(side='left', padx=2)
         
         # Graphique matplotlib
         self.fig = Figure(figsize=(8, 6), dpi=100)
@@ -362,9 +409,24 @@ class QuickMeasureTab:
 
         self.line, = self.ax.plot([], [], 'b-', linewidth=1.5)
 
+        # Crosshair (curseur) - lignes invisibles par défaut
+        self.hline = self.ax.axhline(y=0, color='red', linestyle='--', linewidth=0.8, visible=False)
+        self.vline = self.ax.axvline(x=0, color='red', linestyle='--', linewidth=0.8, visible=False)
+        self.cursor_point, = self.ax.plot([], [], 'ro', markersize=6, visible=False)
+
+        # Annotation pour les coordonnées
+        self.cursor_annotation = self.ax.annotate('', xy=(0, 0), xytext=(10, 10),
+                                                   textcoords='offset points',
+                                                   bbox=dict(boxstyle='round,pad=0.3',
+                                                            facecolor='yellow', alpha=0.8),
+                                                   fontsize=9, visible=False)
+
         self.canvas = FigureCanvasTkAgg(self.fig, parent)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
+
+        # Connecter l'événement mouvement souris
+        self.cursor_cid = None
 
         # Barre d'outils matplotlib
         from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
@@ -668,11 +730,26 @@ class QuickMeasureTab:
             self.ax.relim()
             self.ax.autoscale_view(True, True, True)
 
-        elif mode == 'Manuel (zoom libre)':
+        elif mode == 'Manuel (zoom libre)' or mode == 'Manuel (limites fixes)':
             # Ne rien faire, l'utilisateur contrôle le zoom
             pass
 
-        else:
+        elif mode == 'Fixe X, Auto Y':
+            # X fixe (défini par l'utilisateur), Y autoscale
+            # Trouver les Y min/max pour les points visibles en X
+            x_min, x_max = self.ax.get_xlim()
+            mask = (x_data >= x_min) & (x_data <= x_max)
+            if np.any(mask):
+                visible_y = y_data[mask]
+                y_min, y_max = np.min(visible_y), np.max(visible_y)
+                margin = (y_max - y_min) * 0.1 if y_max != y_min else abs(y_min) * 0.1 or 0.1
+                self.ax.set_ylim(y_min - margin, y_max + margin)
+
+        elif mode == 'Auto X, Fixe Y':
+            # X autoscale, Y fixe (défini par l'utilisateur)
+            self.ax.set_xlim(np.min(x_data), np.max(x_data))
+
+        elif 'derniers points' in mode:
             # Mode défilement: extraire le nombre de points
             if '100' in mode:
                 n_points = 100
@@ -730,11 +807,12 @@ Dernier: {values[-1]:.6g}"""
         self.stats_text.config(state='disabled')
     
     def clear_data(self):
-        """Efface les données"""
+        """Efface les données (possible même pendant une mesure)"""
         if self.measuring:
-            messagebox.showwarning("Attention", "Arrêtez la mesure avant d'effacer les données")
-            return
-        
+            if not messagebox.askyesno("Confirmation",
+                    "Effacer les données pendant la mesure en cours ?"):
+                return
+
         self.data_time.clear()
         self.data_values.clear()
         self.line.set_data([], [])
@@ -742,6 +820,10 @@ Dernier: {values[-1]:.6g}"""
         self.ax.autoscale_view()
         self.canvas.draw()
         self.update_stats()
+
+        # Réinitialiser le temps de départ si mesure en cours
+        if self.measuring:
+            self.start_time = time.time()
     
     def reset_zoom(self):
         """Réinitialise le zoom du graphique"""
@@ -753,7 +835,102 @@ Dernier: {values[-1]:.6g}"""
             self.canvas.draw()
             # Remettre le mode sur "Autoscale"
             self.display_mode_var.set('Autoscale')
-    
+            # Masquer les limites manuelles
+            self.manual_limits_frame.pack_forget()
+
+    def on_display_mode_changed(self, event=None):
+        """Affiche/masque les champs de limites selon le mode"""
+        mode = self.display_mode_var.get()
+        if mode in ('Manuel (limites fixes)', 'Fixe X, Auto Y', 'Auto X, Fixe Y'):
+            # Afficher la frame des limites (après self.graph_options_frame)
+            self.manual_limits_frame.pack(fill='x', pady=5, after=self.graph_options_frame)
+        else:
+            self.manual_limits_frame.pack_forget()
+
+    def apply_manual_limits(self, axis='xy'):
+        """Applique les limites manuelles au graphique
+        Args:
+            axis: 'x', 'y' ou 'xy' pour choisir quel(s) axe(s) modifier
+        """
+        try:
+            # Validation et application X
+            if axis in ('x', 'xy'):
+                x_min = float(self.x_min_var.get())
+                x_max = float(self.x_max_var.get())
+                if x_min >= x_max:
+                    messagebox.showwarning("Erreur", "X min doit être inférieur à X max")
+                    return
+                self.ax.set_xlim(x_min, x_max)
+
+            # Validation et application Y
+            if axis in ('y', 'xy'):
+                y_min = float(self.y_min_var.get())
+                y_max = float(self.y_max_var.get())
+                if y_min >= y_max:
+                    messagebox.showwarning("Erreur", "Y min doit être inférieur à Y max")
+                    return
+                self.ax.set_ylim(y_min, y_max)
+
+            self.canvas.draw()
+
+        except ValueError:
+            messagebox.showwarning("Erreur", "Veuillez entrer des valeurs numériques valides")
+
+    def toggle_cursor(self):
+        """Active/désactive le curseur crosshair"""
+        if self.cursor_var.get():
+            # Activer le curseur
+            self.cursor_cid = self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+        else:
+            # Désactiver le curseur
+            if self.cursor_cid:
+                self.canvas.mpl_disconnect(self.cursor_cid)
+                self.cursor_cid = None
+            # Masquer les éléments du curseur
+            self.hline.set_visible(False)
+            self.vline.set_visible(False)
+            self.cursor_point.set_visible(False)
+            self.cursor_annotation.set_visible(False)
+            self.canvas.draw_idle()
+
+    def on_mouse_move(self, event):
+        """Gère le mouvement de la souris pour le curseur"""
+        # Vérifier que la souris est dans les axes et qu'il y a des données
+        if event.inaxes != self.ax or len(self.data_time) == 0:
+            self.hline.set_visible(False)
+            self.vline.set_visible(False)
+            self.cursor_point.set_visible(False)
+            self.cursor_annotation.set_visible(False)
+            self.canvas.draw_idle()
+            return
+
+        # Trouver le point le plus proche sur la courbe
+        x_mouse = event.xdata
+        x_data = np.array(self.data_time)
+        y_data = np.array(self.data_values)
+
+        # Trouver l'index du point le plus proche en X
+        idx = np.abs(x_data - x_mouse).argmin()
+        x_snap = x_data[idx]
+        y_snap = y_data[idx]
+
+        # Mettre à jour le crosshair
+        self.hline.set_ydata([y_snap, y_snap])
+        self.vline.set_xdata([x_snap, x_snap])
+        self.cursor_point.set_data([x_snap], [y_snap])
+
+        # Mettre à jour l'annotation
+        self.cursor_annotation.xy = (x_snap, y_snap)
+        self.cursor_annotation.set_text(f'X: {x_snap:.3f} s\nY: {y_snap:.6g}')
+
+        # Afficher les éléments
+        self.hline.set_visible(True)
+        self.vline.set_visible(True)
+        self.cursor_point.set_visible(True)
+        self.cursor_annotation.set_visible(True)
+
+        self.canvas.draw_idle()
+
     def save_current_config(self):
         """Sauvegarde la configuration actuelle"""
         self.current_config = {
@@ -789,8 +966,9 @@ Dernier: {values[-1]:.6g}"""
             return
         
         try:
-            with open(filename, 'w') as f:
+            with open(filename, 'w', encoding='utf-8-sig', newline='') as f:
                 # En-tête avec métadonnées
+                # Note: utf-8-sig ajoute un BOM pour compatibilité Excel
                 f.write("# Keithley 2000 Measurement Data\n")
                 f.write(f"# Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"# Measurement Type: {self.current_config.get('measurement_type', 'N/A')}\n")
@@ -819,6 +997,68 @@ Dernier: {values[-1]:.6g}"""
                     f.write(f"{t:.6f},{v:.10g},{unit}\n")
             
             messagebox.showinfo("Succès", f"Données exportées:\n{filename}")
-            
+
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur d'export:\n{e}")
+
+    def export_visible_data(self):
+        """Exporte uniquement les données visibles dans la vue actuelle du graphique"""
+        if len(self.data_time) == 0:
+            messagebox.showwarning("Attention", "Aucune donnée à exporter")
+            return
+
+        # Obtenir les limites actuelles des axes
+        x_min, x_max = self.ax.get_xlim()
+        y_min, y_max = self.ax.get_ylim()
+
+        # Filtrer les données dans la plage X visible
+        x_data = np.array(self.data_time)
+        y_data = np.array(self.data_values)
+
+        mask = (x_data >= x_min) & (x_data <= x_max)
+        visible_x = x_data[mask]
+        visible_y = y_data[mask]
+
+        if len(visible_x) == 0:
+            messagebox.showwarning("Attention", "Aucune donnée visible dans la plage actuelle")
+            return
+
+        # Dialogue de sauvegarde
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialfile=f"keithley_visible_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        )
+
+        if not filename:
+            return
+
+        try:
+            with open(filename, 'w', encoding='utf-8-sig', newline='') as f:
+                # En-tête avec métadonnées
+                f.write("# Keithley 2000 Measurement Data (VISIBLE RANGE ONLY)\n")
+                f.write(f"# Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"# Visible X Range: {x_min:.6f} to {x_max:.6f} s\n")
+                f.write(f"# Visible Y Range: {y_min:.6g} to {y_max:.6g}\n")
+                f.write(f"# Points in range: {len(visible_x)} / {len(self.data_time)} total\n")
+                f.write(f"# Measurement Type: {self.current_config.get('measurement_type', 'N/A')}\n")
+                f.write(f"# Range: {self.current_config.get('range', 'N/A')}\n")
+                f.write(f"# NPLC: {self.current_config.get('nplc', 'N/A')}\n")
+                f.write(f"# GPIB Address: {self.keithley.meter.resource_name if self.keithley.connected else 'N/A'}\n")
+
+                # Statistiques des données visibles
+                f.write(f"# Statistics (visible) - Min: {np.min(visible_y):.6g}, Max: {np.max(visible_y):.6g}, Mean: {np.mean(visible_y):.6g}, Std: {np.std(visible_y):.6g}\n")
+                f.write("#\n")
+
+                # En-tête des colonnes
+                unit = self.keithley.get_unit() if self.keithley.connected else ''
+                f.write(f"Time(s),Value,Unit\n")
+
+                # Données visibles uniquement
+                for t, v in zip(visible_x, visible_y):
+                    f.write(f"{t:.6f},{v:.10g},{unit}\n")
+
+            messagebox.showinfo("Succès", f"Données visibles exportées ({len(visible_x)} points):\n{filename}")
+
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur d'export:\n{e}")

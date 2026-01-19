@@ -23,6 +23,12 @@ class Keithley2000:
         'DIODE': 'DIOD',
         'CONT': 'CONT'
     }
+
+    # Types de mesure supportant NPLC (les AC et autres n'ont pas NPLC)
+    NPLC_SUPPORTED = {'DCV', 'DCI', 'RES_2W', 'RES_4W', 'TEMP'}
+
+    # Types de mesure supportant le réglage de range
+    RANGE_SUPPORTED = {'DCV', 'ACV', 'DCI', 'ACI', 'RES_2W', 'RES_4W'}
     
     def __init__(self, gpib_address=None, timeout=5000):
         """
@@ -130,21 +136,22 @@ class Keithley2000:
         """
         if meas_type not in self.MEASURE_TYPES:
             raise ValueError(f"Type de mesure invalide: {meas_type}")
-        
+
         func = self.MEASURE_TYPES[meas_type]
-        
+
         # Configuration de base
         self.write(f'CONF:{func}')
-        
-        # Configuration de la plage
-        if range_val == 'AUTO':
-            self.write(f'{func}:RANG:AUTO ON')
-        else:
-            self.write(f'{func}:RANG:AUTO OFF')
-            self.write(f'{func}:RANG {range_val}')
-        
-        # Configuration de la résolution
-        if resolution:
+
+        # Configuration de la plage (seulement pour les types qui le supportent)
+        if meas_type in self.RANGE_SUPPORTED:
+            if range_val == 'AUTO':
+                self.write(f'{func}:RANG:AUTO ON')
+            else:
+                self.write(f'{func}:RANG:AUTO OFF')
+                self.write(f'{func}:RANG {range_val}')
+
+        # Configuration de la résolution (seulement si NPLC supporté)
+        if resolution and meas_type in self.NPLC_SUPPORTED:
             self.write(f'{func}:NPLC {resolution}')
     
     def set_nplc(self, nplc, meas_type=None):
@@ -153,7 +160,12 @@ class Keithley2000:
         Args:
             nplc (float): 0.01 à 10 (vitesse vs précision)
             meas_type (str): Type de mesure (si None, utilise la fonction courante)
+        Note: NPLC n'est supporté que pour DCV, DCI, RES_2W, RES_4W, TEMP
         """
+        # Vérifier si le type de mesure supporte NPLC
+        if meas_type and meas_type not in self.NPLC_SUPPORTED:
+            return  # Ignorer silencieusement pour les types non supportés
+
         if meas_type:
             func = self.MEASURE_TYPES.get(meas_type)
         else:
@@ -197,13 +209,14 @@ class Keithley2000:
     
     def measure_fast(self):
         """
-        Mesure rapide: initie, attend la fin, et récupère la mesure
+        Mesure rapide: combine INIT et FETCH en une seule transaction GPIB
         Returns:
             float: Valeur mesurée
+        Note: Plus rapide que measure_single() car évite la reconfiguration
+              L'instrument doit être pré-configuré (trigger source = IMM)
         """
-        self.write('INIT')
-        self.query('*OPC?')  # Attend la fin de la mesure
-        response = self.query('FETC?')
+        # Méthode 1: Combiner INIT et FETCH (évite l'erreur -420)
+        response = self.query('INIT;:FETC?')
         return float(response)
     
     def initiate_measurement(self):
@@ -261,6 +274,7 @@ class Keithley2000:
     def buffer_clear(self):
         """Vide le buffer de mesures"""
         self.write('TRAC:CLE')
+        time.sleep(0.1)
 
     def buffer_configure(self, points=1024):
         """
@@ -269,10 +283,16 @@ class Keithley2000:
             points (int): Nombre de points (max 1024 sur Keithley 2000)
         """
         points = min(points, 1024)  # Limite hardware
-        self.write('TRAC:CLE')
-        self.write(f'TRAC:POIN {points}')
-        self.write('TRAC:FEED SENS')
-        self.write('TRAC:FEED:CONT NEXT')
+        self._buffer_target = points  # Sauvegarder pour buffer_is_complete
+
+        # Séquence de configuration robuste
+        self.write('TRAC:FEED:CONT NEV')  # Arrêter le feed d'abord
+        time.sleep(0.05)
+        self.write('TRAC:CLE')            # Vider le buffer
+        time.sleep(0.05)
+        self.write(f'TRAC:POIN {points}') # Configurer la taille
+        self.write('TRAC:FEED SENS1')     # Source = mesures (SENS1 pas SENS)
+        self.write('TRAC:FEED:CONT NEXT') # Remplir une fois puis arrêter
 
     def buffer_start(self, count=1024):
         """
@@ -281,8 +301,9 @@ class Keithley2000:
             count (int): Nombre de mesures à effectuer
         """
         count = min(count, 1024)
+        self.write('STAT:MEAS:ENAB 512')  # Activer bit "Buffer Full" dans status
         self.write(f'TRIG:COUN {count}')
-        self.write('TRIG:SOUR IMM')  # Trigger immédiat = au plus vite
+        self.write('TRIG:SOUR IMM')       # Trigger immédiat = au plus vite
         self.write('INIT')
 
     def buffer_is_complete(self):
@@ -292,8 +313,15 @@ class Keithley2000:
             bool: True si terminé
         """
         try:
-            actual = int(self.query('TRAC:POIN:ACT?'))
-            target = int(self.query('TRAC:POIN?'))
+            # Méthode 1: Vérifier le status byte (bit 4 = MAV)
+            stb = int(self.query('*STB?'))
+            # Bit 0 du measurement status = Buffer Full
+            if stb & 1:
+                return True
+
+            # Méthode 2: Comparer les points
+            actual = self.buffer_get_count()
+            target = getattr(self, '_buffer_target', 1024)
             return actual >= target
         except:
             return False
@@ -305,7 +333,8 @@ class Keithley2000:
             int: Nombre de points
         """
         try:
-            return int(self.query('TRAC:POIN:ACT?'))
+            response = self.query('TRAC:POIN:ACT?')
+            return int(float(response))  # Parfois retourne un float
         except:
             return 0
 
@@ -315,9 +344,15 @@ class Keithley2000:
         Returns:
             list: Liste des valeurs mesurées
         """
+        # Arrêter l'acquisition si en cours
+        self.write('ABOR')
+        time.sleep(0.1)
+
         response = self.query('TRAC:DATA?')
         # Réponse format: "val1,val2,val3,..."
-        values = [float(v) for v in response.split(',')]
+        if not response or response.strip() == '':
+            return []
+        values = [float(v) for v in response.split(',') if v.strip()]
         return values
 
     def get_unit(self):

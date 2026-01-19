@@ -87,26 +87,42 @@ Background thread: measure_single()/measure_fast() → Update graph via callback
 - `Readme/install_guide.md` - Step-by-step installation
 - `keithley_2000_scpi_reference.html` - SCPI command reference (accessible from Advanced tab)
 
-## TODO - Tâches en attente (session du 16/01/2026)
+## TODO - Session du 19/01/2026
 
-### Bugs à corriger
+### À tester sur l'instrument (toutes les corrections de cette session)
 
-1. **Logo OptiMag** - ✏️ *À tester in situ* - Correction avec `AnnotationBbox` + coordonnées relatives dans `gui/quick_measure_tab.py:90`
+#### Bugs corrigés
 
-2. **Modes de mesure non fonctionnels** - ✏️ *À tester in situ* - Ajout `NPLC_SUPPORTED` et `RANGE_SUPPORTED` dans `keithley2000.py` pour éviter les commandes SCPI invalides sur ACV/ACI
+1. **Logo OptiMag** - ✏️ *À tester* - Correction avec `AnnotationBbox` + coordonnées relatives (reste en place au redimensionnement)
 
-3. **Erreur -420 en mode Fast** - ✏️ *À tester in situ* - Remplacé par `INIT;:FETC?` (une seule commande) dans `keithley2000.py:219`
+2. **Modes de mesure ACV/ACI** - ✏️ *À tester* - Ajout `NPLC_SUPPORTED` et `RANGE_SUPPORTED` dans `keithley2000.py` pour éviter les commandes SCPI invalides
 
-4. **Mode Buffer non fonctionnel** - ✏️ *À tester in situ* - Refonte complète des méthodes buffer dans `keithley2000.py:274-356` (séquence SCPI corrigée, SENS1, délais, gestion status)
+3. **Erreur -420 en mode Fast** - ✏️ *À tester* - Remplacé par `INIT;:FETC?` (une seule commande SCPI)
 
-5. **Export CSV** - ✏️ *À tester in situ* - Correction appliquée : ajout `encoding='utf-8-sig'` et `newline=''` dans `gui/quick_measure_tab.py:792`
+4. **Mode Buffer** - ✏️ *À tester* - Refonte complète : séquence SCPI corrigée (SENS1, délais, TRAC:FEED:CONT NEV d'abord)
 
-### Améliorations demandées
+5. **Export CSV encodage** - ✏️ *À tester* - `encoding='utf-8-sig'` + `newline=''` pour caractères spéciaux (Ω, °C)
 
-6. **Clear pendant la mesure** - ✏️ *À tester in situ* - Correction appliquée : confirmation + reset `start_time` dans `gui/quick_measure_tab.py:732`
+#### Améliorations implémentées
 
-7. **Zoom amélioré** - ✏️ *À tester in situ* - Nouveau mode "Manuel (limites fixes)" avec champs X/Y min/max dans `gui/quick_measure_tab.py`
+6. **Clear pendant la mesure** - ✏️ *À tester* - Possible avec confirmation, reset du temps de départ
 
-8. **Curseur/réticule** - ✏️ *À tester in situ* - Checkbox "Curseur" + crosshair snappé avec annotation X/Y dans `gui/quick_measure_tab.py`
+7. **Zoom amélioré** - ✏️ *À tester* - Modes ajoutés :
+   - "Manuel (limites fixes)" avec champs X/Y sur une ligne
+   - "Fixe X, Auto Y" : X fixe, Y autoscale sur données visibles
+   - "Auto X, Fixe Y" : X défile, Y fixe
+   - Boutons séparés [X] [Y] [X+Y] pour appliquer les limites indépendamment
 
-9. **Export données visibles** - ✏️ *À tester in situ* - Bouton "Export visible" sous le graphique pour exporter uniquement les points dans la plage de zoom actuelle (`gui/quick_measure_tab.py:973`)
+8. **Curseur/réticule** - ✏️ *À tester* - Checkbox "Curseur" + crosshair rouge snappé à la courbe avec annotation X/Y
+
+9. **Export données visibles** - ✏️ *À tester* - Bouton "Export visible" pour exporter uniquement les points dans la plage de zoom actuelle
+
+10. **Interface améliorée** - ✏️ *À tester* :
+    - Fenêtre maximisée au démarrage (`main.py`)
+    - Boutons Start/Pause/Stop/Clear/Export fixes en haut (ne scrollent pas)
+
+### Fichiers modifiés (session 19/01/2026)
+
+- `main.py` : fenêtre maximisée au démarrage
+- `keithley2000.py` : NPLC_SUPPORTED, RANGE_SUPPORTED, measure_fast(), méthodes buffer
+- `gui/quick_measure_tab.py` : logo, curseur, zoom hybride, export visible, boutons fixes

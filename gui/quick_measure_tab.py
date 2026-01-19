@@ -49,7 +49,13 @@ class QuickMeasureTab:
         left_container.pack(side='left', fill='y', padx=5)
         left_container.pack_propagate(False)
 
-        # Canvas pour le scroll
+        # === BOUTONS DE CONTRÔLE (fixes en haut) ===
+        self.create_control_buttons(left_container)
+
+        # Séparateur
+        ttk.Separator(left_container, orient='horizontal').pack(fill='x', pady=5)
+
+        # Canvas pour le scroll (en dessous des boutons)
         self.config_canvas = tk.Canvas(left_container, highlightthickness=0, width=350)
         scrollbar = ttk.Scrollbar(left_container, orient='vertical', command=self.config_canvas.yview)
 
@@ -86,6 +92,36 @@ class QuickMeasureTab:
     def _on_mousewheel(self, event):
         """Gère le scroll avec la molette de la souris"""
         self.config_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def create_control_buttons(self, parent):
+        """Crée les boutons de contrôle (fixes en haut de la colonne gauche)"""
+        # Frame pour les boutons de contrôle
+        control_frame = ttk.Frame(parent)
+        control_frame.pack(fill='x', pady=5, padx=5)
+
+        self.start_btn = ttk.Button(control_frame, text="▶ Start",
+                                    command=self.start_measurement, width=8)
+        self.start_btn.pack(side='left', padx=2)
+
+        self.pause_btn = ttk.Button(control_frame, text="⏸ Pause",
+                                    command=self.pause_measurement, width=8, state='disabled')
+        self.pause_btn.pack(side='left', padx=2)
+
+        self.stop_btn = ttk.Button(control_frame, text="⏹ Stop",
+                                   command=self.stop_measurement, width=8, state='disabled')
+        self.stop_btn.pack(side='left', padx=2)
+
+        self.clear_btn = ttk.Button(control_frame, text="🗑 Clear",
+                                    command=self.clear_data, width=8)
+        self.clear_btn.pack(side='left', padx=2)
+
+        # Frame pour export
+        export_frame = ttk.Frame(parent)
+        export_frame.pack(fill='x', pady=2, padx=5)
+
+        self.export_btn = ttk.Button(export_frame, text="💾 Export CSV",
+                                     command=self.export_data)
+        self.export_btn.pack(side='left', fill='x', expand=True)
 
     def _add_logo(self):
         """Ajoute le logo OptiMag dans la figure, en bas à droite (sous l'axe X)"""
@@ -291,35 +327,7 @@ class QuickMeasureTab:
                                textvariable=self.duration_var, width=10)
         dur_spin.pack(side='left', padx=5)
         ttk.Label(dur_sub_frame, text="secondes").pack(side='left')
-        
-        # Contrôles
-        control_frame = ttk.Frame(parent)
-        control_frame.pack(fill='x', pady=10)
-        
-        self.start_btn = ttk.Button(control_frame, text="▶ Start", 
-                                    command=self.start_measurement, width=10)
-        self.start_btn.pack(side='left', padx=2)
-        
-        self.pause_btn = ttk.Button(control_frame, text="⏸ Pause", 
-                                    command=self.pause_measurement, width=10, state='disabled')
-        self.pause_btn.pack(side='left', padx=2)
-        
-        self.stop_btn = ttk.Button(control_frame, text="⏹ Stop", 
-                                   command=self.stop_measurement, width=10, state='disabled')
-        self.stop_btn.pack(side='left', padx=2)
-        
-        self.clear_btn = ttk.Button(control_frame, text="🗑 Clear", 
-                                    command=self.clear_data, width=10)
-        self.clear_btn.pack(side='left', padx=2)
-        
-        # Export
-        export_frame = ttk.Frame(parent)
-        export_frame.pack(fill='x', pady=5)
-        
-        self.export_btn = ttk.Button(export_frame, text="💾 Export CSV", 
-                                     command=self.export_data, width=20)
-        self.export_btn.pack(fill='x')
-        
+
         # Statistiques
         stats_frame = ttk.LabelFrame(parent, text="Statistiques", padding=10)
         stats_frame.pack(fill='x', pady=5)
